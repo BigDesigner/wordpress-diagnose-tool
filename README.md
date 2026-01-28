@@ -1,6 +1,10 @@
-# WP Diagnose (v1.0)
+# WP Diagnose (v1.1)
 
 **WP Diagnose** is a single-file diagnostic and maintenance tool designed for quick intervention in emergency situations where your WordPress site is locked, giving errors, or you can't access your admin panel. It is not a plugin and should not be kept on your server permanently.
+
+**What's New in v1.1:**
+*   Security improvements and minor bug fixes.
+*   Enhanced checksum verification logic.
 
 ## How to Use
 
@@ -30,9 +34,13 @@ This project is licensed under the GNU General Public License v3.0 (GPL-3.0). Se
 
 ---
 
-# WP Diagnose (v1.0)
+# WP Diagnose (v1.1)
 
 **WP Diagnose**, WordPress siteniz kilitlendiğinde, hata verdiğinde veya yönetim panelinize erişemediğiniz acil durumlarda hızlı müdahale için tasarlanmış tek dosyalık bir teşhis ve bakım aracıdır. Bu bir eklenti değildir ve kalıcı olarak sunucunuzda tutulmamalıdır.
+
+**v1.1 Yenilikleri:**
+*   Güvenlik iyileştirmeleri ve küçük hata düzeltmeleri.
+*   Geliştirilmiş dosya bütünlüğü kontrol mantığı.
 
 ## Nasıl Kullanılır?
 
