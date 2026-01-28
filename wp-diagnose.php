@@ -383,6 +383,7 @@ if (!$WP_LOADED && !empty($_SESSION['db_host'])) {
 }
 
 // -------------------- HTML Head --------------------
+ob_start();
 ?><!doctype html>
 <html lang="<?php echo $LANG === 'tr' ? 'tr' : 'en'; ?>">
 
@@ -1429,6 +1430,23 @@ if (!$WP_LOADED && !empty($_SESSION['db_host'])) {
                 id="json-data"><?php echo json_encode($REPORT_DATA, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE); ?></pre>
         </div>
 
+        <div
+            style="text-align:center; padding:20px; color:#666; font-size:12px; border-top:1px solid #c3c4c7; background:#f6f7f7;">
+            Developed by <a href="https://github.com/BigDesigner" target="_blank"
+                style="color:#0071a1; text-decoration:none; font-weight:bold;">BigDesigner</a>
+        </div>
 </body>
 
 </html>
+<?php
+$output = ob_get_clean();
+if (strpos($output, 'https://github.com/BigDesigner') === false) {
+    exit('<div style="background:#fbe6e6; color:#c82124; padding:40px; text-align:center; font-family:sans-serif; border:2px solid #c82124; margin:50px auto; max-width:600px; border-radius:10px;">
+        <h1 style="margin-top:0;">SYSTEM ERROR</h1>
+        <p style="font-size:18px;">Developer attribution link has been removed or modified.</p>
+        <p>This tool is provided for free by <b>BigDesigner</b>. Please restore the original credits to continue using it.</p>
+        <a href="https://github.com/BigDesigner" style="color:#0073aa; text-decoration:underline;">Visit Developer Profile</a>
+    </div>');
+}
+echo $output;
+?>
