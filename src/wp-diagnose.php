@@ -120,101 +120,6 @@ if (!defined('ABSPATH')) {
     define('ABSPATH', rtrim($base, '/\\') . '/');
 }
 
-// -------------------- JSON API & Actions --------------------
-$is_json = (isset($_GET['format']) && $_GET['format'] === 'json') || 
-           (isset($_SERVER['HTTP_ACCEPT']) && strpos($_SERVER['HTTP_ACCEPT'], 'application/json') !== false);
-
-if ($is_json || isset($_GET['action'])) {
-    
-    // Sanitize & Debug API for predictable JSON parsing
-    error_reporting(E_ALL);
-    ini_set('display_errors', '0');
-
-    try {
-        $engine = new \WPDiagnose\Core\Engine();
-        $engine->registerAgent(new \WPDiagnose\Agents\ServerInspector\ServerInspector());
-        $engine->registerAgent(new \WPDiagnose\Agents\WPInspector\WPInspector($WP_LOADED));
-        $engine->registerAgent(new \WPDiagnose\Agents\SecurityInspector\SecurityInspector());
-        $engine->registerAgent(new \WPDiagnose\Agents\BootstrapInspector\BootstrapInspector());
-        $engine->registerAgent(new \WPDiagnose\Agents\DBHealth\DBHealth($WP_LOADED));
-        $engine->registerAgent(new \WPDiagnose\Agents\CoreIntegrityAgent\CoreIntegrityAgent($WP_LOADED));
-        $engine->registerAgent(new \WPDiagnose\Agents\AssetManagerAgent\AssetManagerAgent($WP_LOADED));
-        $engine->registerAgent(new \WPDiagnose\Agents\CoreOperationsAgent\CoreOperationsAgent($WP_LOADED));
-
-        $response = ['success' => true, 'data' => []];
-
-        if (isset($_GET['action'])) {
-            if ($_GET['action'] === 'fix') {
-                $agent = $_GET['agent'] ?? '';
-                $id    = $_GET['id'] ?? '';
-                $response['success'] = $engine->performFix($agent, $id);
-            } elseif ($_GET['action'] === 'self_destruct') {
-                $response['success'] = \WPDiagnose\Core\Cleanup::fullWipe();
-            } elseif ($_GET['action'] === 'fetch_report') {
-                $reports = $engine->getReports();
-                while (ob_get_level()) ob_end_clean(); // Guaranteed clean output
-                header('Content-Type: application/json; charset=utf-8');
-                echo json_encode($reports, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-                exit;
-            }
-
-            if ($is_json) {
-                while (ob_get_level()) ob_end_clean(); // Purge all buffers completely
-                header('Content-Type: application/json; charset=utf-8');
-                echo json_encode($response, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-                exit;
-            }
-        }
-
-        if ($is_json) {
-            $reports = $engine->getReports();
-            while (ob_get_level()) ob_end_clean(); // Fallback for format=json
-            header('Content-Type: application/json; charset=utf-8');
-            echo json_encode($reports, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-            exit;
-        }
-        
-    } catch (\Throwable $e) {
-        if ($is_json) {
-            while (ob_get_level()) ob_end_clean();
-            header('Content-Type: application/json; charset=utf-8');
-            echo json_encode([
-                'status'  => 'error', 
-                'message' => 'API Engine Crash: ' . $e->getMessage()
-            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-            exit;
-        }
-    }
-}
-
-// -------------------- AUDIT LOGGER --------------------
-function wpd_log_action($action, $details = '') {
-    $timestamp = date('Y-m-d H:i:s');
-    $ip = $_SERVER['REMOTE_ADDR'] ?? 'UNKNOWN';
-    $message = "[$timestamp] [IP: $ip] ACTION: $action" . ($details ? " | DETAILS: $details" : "") . PHP_EOL;
-    @file_put_contents(LOG_FILE, $message, FILE_APPEND | LOCK_EX);
-}
-
-// -------------------- Self-Destruct Mechanism (0.2.2-beta Enhanced) --------------------
-$self_destruct_file = __FILE__;
-$expiration_time = 3600; // 60 minutes in seconds
-$file_age = time() - filemtime(__FILE__);
-
-if ($file_age > $expiration_time) {
-    wpd_log_action('AUTO_DESTRUCT', 'TTL exceeded 60 minutes. Initiating self-destruct.');
-    if (\WPDiagnose\Core\Cleanup::fullWipe()) {
-        header('Content-Type: text/html; charset=utf-8');
-        exit('<div style="background:#000;color:#00b84f;padding:20px;text-align:center;">WP Diagnose dosyasÄ± ve tÃ¼m yardÄ±mcÄ± modÃ¼ller gÃ¼venlik iÃ§in silinmiÅŸtir.</div>');
-    } else {
-        header('Content-Type: text/html; charset=utf-8');
-        exit('<div style="background:#000;color:#ef4444;padding:20px;text-align:center;">UYARI: Dosyalar otomatik olarak silinemedi. LÃ¼tfen gÃ¼venlik iÃ§in manuel olarak silin.</div>');
-    }
-}
-// -------------------- End Self-Destruct --------------------
-
-@header('Content-Type: text/html; charset=utf-8');
-@date_default_timezone_set('UTC');
-
 // -------------------- DB Mode Helper --------------------
 class WPD_DB
 {
@@ -288,6 +193,105 @@ if (!isset($WP_LOADED) || !$WP_LOADED) {
         }
     }
 }
+
+// -------------------- JSON API & Actions --------------------
+$is_json = (isset($_GET['format']) && $_GET['format'] === 'json') || 
+           (isset($_SERVER['HTTP_ACCEPT']) && strpos($_SERVER['HTTP_ACCEPT'], 'application/json') !== false);
+
+if ($is_json || isset($_GET['action'])) {
+    
+    // Sanitize & Debug API for predictable JSON parsing
+    error_reporting(E_ALL);
+    ini_set('display_errors', '0');
+
+    try {
+        $engine = new \WPDiagnose\Core\Engine();
+        $engine->registerAgent(new \WPDiagnose\Agents\ServerInspector\ServerInspector());
+        $engine->registerAgent(new \WPDiagnose\Agents\WPInspector\WPInspector($WP_LOADED));
+        $engine->registerAgent(new \WPDiagnose\Agents\SecurityInspector\SecurityInspector());
+        $engine->registerAgent(new \WPDiagnose\Agents\BootstrapInspector\BootstrapInspector());
+        $engine->registerAgent(new \WPDiagnose\Agents\DBHealth\DBHealth($WP_LOADED));
+        $engine->registerAgent(new \WPDiagnose\Agents\CoreIntegrityAgent\CoreIntegrityAgent($WP_LOADED));
+        $engine->registerAgent(new \WPDiagnose\Agents\AssetManagerAgent\AssetManagerAgent($WP_LOADED));
+        $engine->registerAgent(new \WPDiagnose\Agents\CoreOperationsAgent\CoreOperationsAgent($WP_LOADED));
+
+        $response = ['success' => true, 'data' => []];
+
+        if (isset($_GET['action'])) {
+            if ($_GET['action'] === 'fix') {
+                $agent = $_POST['agent'] ?? $_GET['agent'] ?? '';
+                $id    = $_POST['id'] ?? $_GET['id'] ?? '';
+                
+                wpd_log_action('API_FIX_POST', "Agent: $agent | FixID: $id | WP_LOADED: " . ($WP_LOADED ? 'YES' : 'NO'));
+                $response['success'] = $engine->performFix($agent, $id);
+            } elseif ($_GET['action'] === 'self_destruct') {
+                $response['success'] = \WPDiagnose\Core\Cleanup::fullWipe();
+            } elseif ($_GET['action'] === 'fetch_report') {
+                $reports = $engine->getReports();
+                while (ob_get_level()) ob_end_clean(); // Guaranteed clean output
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode($reports, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                exit;
+            }
+
+            if ($is_json) {
+                while (ob_get_level()) ob_end_clean(); // Purge all buffers completely
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode($response, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                exit;
+            }
+        }
+
+        if ($is_json) {
+            $reports = $engine->getReports();
+            while (ob_get_level()) ob_end_clean(); // Fallback for format=json
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode($reports, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            exit;
+        }
+        
+    } catch (\Throwable $e) {
+        if ($is_json) {
+            while (ob_get_level()) ob_end_clean();
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode([
+                'status'  => 'error', 
+                'message' => 'API Engine Crash: ' . $e->getMessage()
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            exit;
+        }
+    }
+}
+
+// -------------------- AUDIT LOGGER --------------------
+function wpd_log_action($action, $details = '') {
+    $timestamp = date('Y-m-d H:i:s');
+    $ip = $_SERVER['REMOTE_ADDR'] ?? 'UNKNOWN';
+    $message = "[$timestamp] [IP: $ip] ACTION: $action" . ($details ? " | DETAILS: $details" : "") . PHP_EOL;
+    @file_put_contents(LOG_FILE, $message, FILE_APPEND | LOCK_EX);
+}
+
+// -------------------- Self-Destruct Mechanism (0.2.2-beta Enhanced) --------------------
+$self_destruct_file = __FILE__;
+$expiration_time = 3600; // 60 minutes in seconds
+$file_age = time() - filemtime(__FILE__);
+
+if ($file_age > $expiration_time) {
+    wpd_log_action('AUTO_DESTRUCT', 'TTL exceeded 60 minutes. Initiating self-destruct.');
+    if (\WPDiagnose\Core\Cleanup::fullWipe()) {
+        header('Content-Type: text/html; charset=utf-8');
+        exit('<div style="background:#000;color:#00b84f;padding:20px;text-align:center;">WP Diagnose dosyasÄ± ve tÃ¼m yardÄ±mcÄ± modÃ¼ller gÃ¼venlik iÃ§in silinmiÅŸtir.</div>');
+    } else {
+        header('Content-Type: text/html; charset=utf-8');
+        exit('<div style="background:#000;color:#ef4444;padding:20px;text-align:center;">UYARI: Dosyalar otomatik olarak silinemedi. LÃ¼tfen gÃ¼venlik iÃ§in manuel olarak silin.</div>');
+    }
+}
+// -------------------- End Self-Destruct --------------------
+
+@header('Content-Type: text/html; charset=utf-8');
+@date_default_timezone_set('UTC');
+
+// WPD_DB and Independent Mode Connection Moved Up
 
 // -------------------- Modern SPA Dashboard (v0.2.2-beta) --------------------
 ?><!DOCTYPE html>
@@ -590,16 +594,23 @@ if (!isset($WP_LOADED) || !$WP_LOADED) {
                     if (!confirm(`Trigger Agentic Fix for [${id}]?`)) return;
                     
                     try {
-                        const response = await fetch(`?token=${this.token}&action=fix&agent=${agent}&id=${id}&format=json`);
+                        const fd = new FormData();
+                        fd.append('agent', agent);
+                        fd.append('id', id);
+
+                        const response = await fetch(`?token=${this.token}&action=fix&format=json`, {
+                            method: 'POST',
+                            body: fd
+                        });
                         const result = await response.json();
                         if (result.success) {
-                            alert('Agent recovered successfully. Updating audit...');
+                            alert('Action executed successfully! Check status...');
                             this.fetchReport();
                         } else {
-                            alert('Recovery failed. Manual intervention advised.');
+                            alert('Recovery failed or blocked. Manual intervention advised.');
                         }
                     } catch (e) {
-                        alert('API Communication Timeout.');
+                        alert('API Communication Timeout or Error: ' + e.message);
                     }
                 },
                 async selfDestruct() {

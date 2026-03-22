@@ -65,19 +65,17 @@ class Engine
         return $reports;
     }
 
-    /**
-     * Triggers a specific fix on a target agent.
-     * 
-     * @param string $agentName The name of the agent responsible for the fix.
-     * @param string $fixId The identifier for the specific fix to perform.
-     * @return bool True if successful, false otherwise.
-     */
     public function performFix(string $agentName, string $fixId): bool
     {
+        error_log("[WP Diagnose Engine] performAction triggered - Agent: {$agentName}, ActionType: {$fixId}");
+        
         if (!isset($this->agents[$agentName])) {
+            error_log("[WP Diagnose Engine] WARNING: Agent {$agentName} not registered.");
             return false;
         }
 
-        return $this->agents[$agentName]->fix($fixId);
+        $result = $this->agents[$agentName]->fix($fixId);
+        error_log("[WP Diagnose Engine] Action {$fixId} on {$agentName} returning " . ($result ? 'TRUE' : 'FALSE'));
+        return $result;
     }
 }
