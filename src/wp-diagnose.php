@@ -65,7 +65,7 @@ if ($is_api_request) {
 // Start output buffering immediately so any stray output can be discarded before JSON output.
 ob_start();
 
-// -------------------- 0.2.1-beta SECURITY CONFIGURATION --------------------
+// -------------------- 0.2.2-beta SECURITY CONFIGURATION --------------------
 define('DIAG_TOKEN', 'SECURE_TOKEN_2026'); // Usage: wp-diagnose.php?token=SECURE_TOKEN_2026
 define('ALLOWED_IPS', ['127.0.0.1', '::1', 'CHANGE_TO_YOUR_STATIC_IP']); // Strict IP Allowlist
 define('LOG_FILE', __DIR__ . '/.ht-wp-diagnose.log');
@@ -195,7 +195,7 @@ function wpd_log_action($action, $details = '') {
     @file_put_contents(LOG_FILE, $message, FILE_APPEND | LOCK_EX);
 }
 
-// -------------------- Self-Destruct Mechanism (0.2.1-beta Enhanced) --------------------
+// -------------------- Self-Destruct Mechanism (0.2.2-beta Enhanced) --------------------
 $self_destruct_file = __FILE__;
 $expiration_time = 3600; // 60 minutes in seconds
 $file_age = time() - filemtime(__FILE__);
@@ -289,7 +289,7 @@ if (!isset($WP_LOADED) || !$WP_LOADED) {
     }
 }
 
-// -------------------- Modern SPA Dashboard (v0.2.1-beta) --------------------
+// -------------------- Modern SPA Dashboard (v0.2.2-beta) --------------------
 ?><!DOCTYPE html>
 <html lang="en" class="dark">
 <head>
@@ -347,7 +347,7 @@ if (!isset($WP_LOADED) || !$WP_LOADED) {
                 </div>
                 <div class="bg-slate-800/50 p-4 rounded-lg border border-slate-700">
                     <span class="text-slate-500 text-xs font-bold uppercase block mb-1">Audit Mode</span>
-                    <span class="text-slate-400 font-mono text-sm block truncate">v0.2.1-beta Agentic Collective</span>
+                    <span class="text-slate-400 font-mono text-sm block truncate">v0.2.2-beta Agentic Collective</span>
                 </div>
             </div>
 
@@ -369,7 +369,8 @@ if (!isset($WP_LOADED) || !$WP_LOADED) {
             <div x-show="!loading" class="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 <template x-for="(report, agent) in reports" :key="agent">
                     <div x-show="activeTab === 'all' || activeTab === agent" class="bg-slate-800 border border-slate-700/50 rounded-xl shadow-2xl overflow-hidden flex flex-col hover:border-slate-600 transition">
-                        <div class="bg-slate-900/50 px-6 py-4 flex justify-between items-center border-b border-slate-700">
+                        <div class="px-6 py-4 bg-slate-800/80 border-t border-slate-700/60 flex justify-between items-center text-xs text-slate-400">
+                            <span class="font-mono">WP Diagnose PRO v0.2.2-beta</span>
                             <div class="flex items-center gap-3">
                                 <div class="w-2 h-2 rounded-full bg-emerald-500"></div>
                                 <h2 class="text-lg font-bold text-slate-100 uppercase tracking-tight" x-text="agent"></h2>
@@ -393,6 +394,15 @@ if (!isset($WP_LOADED) || !$WP_LOADED) {
                                     
                                     <p class="text-sm text-slate-400 leading-relaxed mb-4" x-text="formatFound(finding)"></p>
                                     
+                                    <!-- Re-install Core Button for Watchdog -->
+                                    <template x-if="(agent === 'CoreIntegrityAgent' && (id === 'mismatch_files' || id === 'missing_files')) && finding.status !== 'OK'">
+                                        <div class="flex gap-2 mb-4">
+                                            <button @click="attemptFix('CoreOperationsAgent', 'reinstall_core')" class="text-[10px] font-bold uppercase tracking-wider bg-rose-600/20 hover:bg-rose-600 text-rose-400 hover:text-white border border-rose-600/50 px-4 py-2 rounded transition">
+                                                Force Re-install WP Core
+                                            </button>
+                                        </div>
+                                    </template>
+
                                     <!-- Dynamic Data Table UI (The Scannable Layout) -->
                                     <template x-if="finding.data && typeof finding.data === 'object'">
                                         <div class="mb-4 overflow-hidden rounded-lg border border-slate-700/60 shadow-inner bg-slate-900/30">
@@ -444,20 +454,28 @@ if (!isset($WP_LOADED) || !$WP_LOADED) {
                                             <!-- Simple Key-Value Config / Toggles -->
                                             <template x-if="!Array.isArray(finding.data) && typeof Object.values(finding.data)[0] === 'string'">
                                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-2 p-3 bg-slate-900">
-                                                    <template x-for="(val, k) in finding.data" :key="k">
-                                                        <div class="flex items-center justify-between p-2 rounded bg-slate-800/80 border border-slate-700 group hover:border-sky-500/50 transition">
-                                                            <div class="text-xs font-mono font-bold text-slate-300" x-text="k"></div>
-                                                            <div class="flex items-center gap-3">
-                                                                <span class="text-xs px-2 py-0.5 rounded bg-black/30" x-text="val" :class="val==='true' || val==='active' || val==='ready' ? 'text-emerald-400' : 'text-slate-400'"></span>
-                                                                
-                                                                <!-- Quick Actions for God Mode & Config -->
-                                                                <button x-show="k==='WP_DEBUG'" @click="attemptFix(agent, 'toggle_wp_debug')" class="text-sky-400 hover:text-white px-2 py-0.5 rounded border border-sky-400/30 hover:bg-sky-500/20 text-[10px] uppercase font-bold">Toggle</button>
-                                                                <button x-show="k==='SAVEQUERIES'" @click="attemptFix(agent, 'toggle_savequeries')" class="text-sky-400 hover:text-white px-2 py-0.5 rounded border border-sky-400/30 hover:bg-sky-500/20 text-[10px] uppercase font-bold">Toggle</button>
-                                                                <button x-show="k==='maintenance_mode'" @click="attemptFix(agent, 'toggle_maintenance')" class="text-amber-400 hover:text-white px-2 py-0.5 rounded border border-amber-400/30 hover:bg-amber-500/20 text-[10px] uppercase font-bold">Toggle</button>
-                                                                <button x-show="k==='cache_clear'" @click="attemptFix(agent, 'clear_cache')" class="text-rose-400 hover:text-white px-2 py-0.5 rounded border border-rose-400/30 hover:bg-rose-500/20 text-[10px] uppercase font-bold">Flush DB+FS</button>
-                                                                <button x-show="k==='password_reset'" @click="const u=prompt('Enter Admin Username to Reset:'); if(u) attemptFix(agent, 'reset_admin:'+u);" class="text-purple-400 hover:text-white px-2 py-0.5 rounded border border-purple-400/30 hover:bg-purple-500/20 text-[10px] uppercase font-bold">Force Reset</button>
-                                                                <button x-show="k==='core_update' && val==='ready'" @click="attemptFix(agent, 'core_update')" class="text-emerald-400 hover:text-white px-2 py-0.5 rounded border border-emerald-400/30 hover:bg-emerald-500/20 text-[10px] uppercase font-bold">Try In-Place Update</button>
-                                                            </div>
+                                                    <template x-for="(v, k) in finding.data" :key="k">
+                                                        <div class="flex items-center justify-between py-2 border-b border-slate-700/50 last:border-0 hover:bg-slate-800/30 transition px-2 -mx-2 rounded">
+                                                            <dt class="font-bold text-slate-300 uppercase tracking-widest text-[10px]" x-text="k.replace(/_/g, ' ')"></dt>
+                                                            
+                                                            <!-- Simple value rendering -->
+                                                            <template x-if="typeof v !== 'object'">
+                                                                <div class="flex items-center gap-3">
+                                                                    <span class="text-slate-300 font-mono text-xs whitespace-pre-wrap break-words" x-text="v === '' ? 'Empty' : (k === 'status' ? v.toUpperCase() : v)"></span>
+                                                                    
+                                                                    <!-- God Mode Controls -->
+                                                                    <template x-if="agent === 'CoreOperationsAgent'">
+                                                                        <div class="flex items-center gap-2">
+                                                                            <button x-show="k === 'WP_DEBUG'" @click="attemptFix(agent, 'toggle_wp_debug')" class="px-2 py-1 bg-amber-600/20 text-amber-400 border border-amber-600/50 rounded text-[9px] uppercase font-bold hover:bg-amber-600 hover:text-white transition">Toggle</button>
+                                                                            <button x-show="k === 'SAVEQUERIES'" @click="attemptFix(agent, 'toggle_savequeries')" class="px-2 py-1 bg-amber-600/20 text-amber-400 border border-amber-600/50 rounded text-[9px] uppercase font-bold hover:bg-amber-600 hover:text-white transition">Toggle</button>
+                                                                            <button x-show="k === 'maintenance_mode'" @click="attemptFix(agent, 'toggle_maintenance')" class="px-2 py-1 bg-amber-600/20 text-amber-400 border border-amber-600/50 rounded text-[9px] uppercase font-bold hover:bg-amber-600 hover:text-white transition">Toggle</button>
+                                                                            <button x-show="k === 'cache_clear'" @click="attemptFix(agent, 'clear_cache')" class="px-2 py-1 bg-sky-600/20 text-sky-400 border border-sky-600/50 rounded text-[9px] uppercase font-bold hover:bg-sky-600 hover:text-white transition" x-text="'Flush Cache'"></button>
+                                                                            <button x-show="k === 'password_reset'" @click="attemptFix(agent, 'reset_admin:admin')" class="px-2 py-1 bg-rose-600/20 text-rose-400 border border-rose-600/50 rounded text-[9px] uppercase font-bold hover:bg-rose-600 hover:text-white transition" x-text="'Reset admin'"></button>
+                                                                            <button x-show="k === 'core_update' && v !== 'unavailable'" @click="attemptFix(agent, 'core_update')" class="px-2 py-1 bg-emerald-600/20 text-emerald-400 border border-emerald-600/50 rounded text-[9px] uppercase font-bold hover:bg-emerald-600 hover:text-white transition" x-text="'Force Update'"></button>
+                                                                        </div>
+                                                                    </template>
+                                                                </div>
+                                                            </template>
                                                         </div>
                                                     </template>
                                                     
@@ -489,7 +507,7 @@ if (!isset($WP_LOADED) || !$WP_LOADED) {
 
         <!-- Footer -->
         <footer class="max-w-6xl mx-auto mt-20 pt-10 border-t border-slate-700/50 text-center mb-10">
-            <p class="text-slate-600 text-[10px] font-mono uppercase tracking-[0.2em]">WP Diagnose Agentic Swarm v0.2.1-beta &copy; 2026</p>
+            <p class="text-slate-600 text-[10px] font-mono uppercase tracking-[0.2em]">WP Diagnose Agentic Swarm v0.2.2-beta &copy; 2026</p>
         </footer>
     </div>
 

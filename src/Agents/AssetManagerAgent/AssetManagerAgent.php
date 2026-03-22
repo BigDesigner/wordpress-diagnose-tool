@@ -152,6 +152,17 @@ class AssetManagerAgent implements DiagnosticInterface
 
     private function togglePlugin(string $pluginRelPath): bool
     {
+        if ($this->isWpLoaded && function_exists('deactivate_plugins')) {
+            require_once ABSPATH . 'wp-admin/includes/plugin.php';
+            if (is_plugin_active($pluginRelPath)) {
+                deactivate_plugins($pluginRelPath, true);
+                return true;
+            } else {
+                $r = activate_plugin($pluginRelPath, '', false, false);
+                return !is_wp_error($r);
+            }
+        }
+
         $activePlugins = $this->getOption('active_plugins', []);
         if (!is_array($activePlugins)) $activePlugins = [];
 
@@ -168,6 +179,11 @@ class AssetManagerAgent implements DiagnosticInterface
 
     private function activateTheme(string $themeSlug): bool
     {
+        if ($this->isWpLoaded && function_exists('switch_theme')) {
+            switch_theme($themeSlug);
+            return true;
+        }
+
         $themeDir = ABSPATH . 'wp-content/themes/' . $themeSlug;
         if (!is_dir($themeDir)) return false;
 

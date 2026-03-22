@@ -67,7 +67,7 @@ class CoreOperationsAgent implements DiagnosticInterface
             return $this->toggleMaintenance();
         } elseif ($id === 'clear_cache') {
             return $this->clearCache();
-        } elseif ($id === 'core_update') {
+        } elseif ($id === 'core_update' || $id === 'reinstall_core') {
             return $this->updateCore();
         } elseif ($id === 'view_error_log') {
             $this->outputErrorLog();
@@ -187,8 +187,21 @@ class CoreOperationsAgent implements DiagnosticInterface
         require_once ABSPATH . 'wp-admin/includes/misc.php';
 
         ob_start();
-        $upgrader = new \Core_Upgrader(new \WP_Upgrader_Skin());
-        $result = $upgrader->upgrade(get_site_transient('update_core')->updates[0] ?? null);
+        $upgrader = new \Core_Upgrader(new \Automatic_Upgrader_Skin());
+        $updates = get_core_updates(['dismissed' => false]);
+        $target = $updates[0] ?? null;
+
+        if ($target && $target->response === 'latest') {
+            if (function_exists('find_core_update')) {
+                $found = find_core_update($target->current, $target->locale);
+                if ($found) $target = $found;
+            }
+        }
+
+        $result = false;
+        if ($target) {
+            $result = $upgrader->upgrade($target);
+        }
         ob_end_clean();
 
         return !is_wp_error($result) && $result;
