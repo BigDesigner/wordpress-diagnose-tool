@@ -17,6 +17,9 @@ require_once __DIR__ . '/src/Agents/WPInspector/WPInspector.php';
 require_once __DIR__ . '/src/Agents/SecurityInspector/SecurityInspector.php';
 require_once __DIR__ . '/src/Agents/BootstrapInspector/BootstrapInspector.php';
 require_once __DIR__ . '/src/Agents/DBHealth/DBHealth.php';
+require_once __DIR__ . '/src/Agents/CoreIntegrityAgent/CoreIntegrityAgent.php';
+require_once __DIR__ . '/src/Agents/AssetManagerAgent/AssetManagerAgent.php';
+require_once __DIR__ . '/src/Agents/CoreOperationsAgent/CoreOperationsAgent.php';
 
 // -------------------- WP-CLI INTEGRATION --------------------
 if (defined('WP_CLI') && WP_CLI) {
@@ -27,6 +30,9 @@ if (defined('WP_CLI') && WP_CLI) {
         $engine->registerAgent(new \WPDiagnose\Agents\SecurityInspector\SecurityInspector());
         $engine->registerAgent(new \WPDiagnose\Agents\BootstrapInspector\BootstrapInspector());
         $engine->registerAgent(new \WPDiagnose\Agents\DBHealth\DBHealth(true));
+        $engine->registerAgent(new \WPDiagnose\Agents\CoreIntegrityAgent\CoreIntegrityAgent(true));
+        $engine->registerAgent(new \WPDiagnose\Agents\AssetManagerAgent\AssetManagerAgent(true));
+        $engine->registerAgent(new \WPDiagnose\Agents\CoreOperationsAgent\CoreOperationsAgent(true));
 
         if (isset($assoc_args['fix'])) {
             $agent = $assoc_args['agent'] ?? 'ServerInspector';
@@ -109,6 +115,11 @@ for ($i = 0; $i <= 5; $i++) {
     $base = dirname($base);
 }
 
+// Fallback for Independent Mode (Agents rely on ABSPATH)
+if (!defined('ABSPATH')) {
+    define('ABSPATH', rtrim($base, '/\\') . '/');
+}
+
 // -------------------- JSON API & Actions --------------------
 $is_json = (isset($_GET['format']) && $_GET['format'] === 'json') || 
            (isset($_SERVER['HTTP_ACCEPT']) && strpos($_SERVER['HTTP_ACCEPT'], 'application/json') !== false);
@@ -126,6 +137,9 @@ if ($is_json || isset($_GET['action'])) {
         $engine->registerAgent(new \WPDiagnose\Agents\SecurityInspector\SecurityInspector());
         $engine->registerAgent(new \WPDiagnose\Agents\BootstrapInspector\BootstrapInspector());
         $engine->registerAgent(new \WPDiagnose\Agents\DBHealth\DBHealth($WP_LOADED));
+        $engine->registerAgent(new \WPDiagnose\Agents\CoreIntegrityAgent\CoreIntegrityAgent($WP_LOADED));
+        $engine->registerAgent(new \WPDiagnose\Agents\AssetManagerAgent\AssetManagerAgent($WP_LOADED));
+        $engine->registerAgent(new \WPDiagnose\Agents\CoreOperationsAgent\CoreOperationsAgent($WP_LOADED));
 
         $response = ['success' => true, 'data' => []];
 
@@ -201,252 +215,6 @@ if ($file_age > $expiration_time) {
 @header('Content-Type: text/html; charset=utf-8');
 @date_default_timezone_set('UTC');
 
-// -------------------- Session / Lang / Nonce --------------------
-if (session_status() !== PHP_SESSION_ACTIVE) {
-    @session_start();
-}
-
-// Language
-if (!empty($_GET['lang']))
-    $_SESSION['wpdiag_lang'] = $_GET['lang'];
-$LANG = $_SESSION['wpdiag_lang'] ?? 'en';
-if (!in_array($LANG, ['tr', 'en'], true))
-    $LANG = 'en';
-
-// Nonce
-if (empty($_SESSION['wpdiag_nonce']))
-    $_SESSION['wpdiag_nonce'] = bin2hex(random_bytes(16));
-$NONCE = $_SESSION['wpdiag_nonce'];
-function check_nonce()
-{
-    if (empty($_REQUEST['_nonce']) || $_REQUEST['_nonce'] !== ($_SESSION['wpdiag_nonce'] ?? ''))
-        exit('Nonce error');
-}
-
-// i18n
-function t($key)
-{
-    static $TR, $EN;
-    global $LANG;
-    if (!$TR) {
-        $TR = [
-            'title' => 'WP TeÅŸhis',
-            'reload' => 'Yeniden Tara',
-            'mode_full' => 'Tam Mod',
-            'mode_db' => 'DB Modu',
-            'general' => 'Genel BakÄ±ÅŸ',
-            'integrity' => 'Ã‡ekirdek BÃ¼tÃ¼nlÃ¼ÄŸÃ¼',
-            'security' => 'GÃ¼venlik HÄ±zlÄ± KazanÄ±mlarÄ±',
-            'urls' => 'URL TutarlÄ±lÄ±ÄŸÄ± & HTTPS',
-            'seo' => 'SEO & Sitemap',
-            'plugins' => 'Eklentiler',
-            'themes' => 'Temalar',
-            'updates' => 'GÃ¼ncellemeler',
-            'tools' => 'AraÃ§lar',
-            'server' => 'Sunucu/PHP',
-            'db_mode_form_title' => 'DB Modu â€“ WordPress yÃ¼klenemedi. VeritabanÄ± bilgilerini girin:',
-            'db_host' => 'DB Sunucusu',
-            'db_name' => 'DB AdÄ±',
-            'db_user' => 'DB KullanÄ±cÄ±',
-            'db_pass' => 'DB Parola',
-            'db_prefix' => 'Tablo Ã–neki (table_prefix)',
-            'save' => 'Kaydet',
-            'full_only' => '(Tam Mod gerekli)',
-            'activate' => 'AktifleÅŸtir',
-            'deactivate' => 'Devre DÄ±ÅŸÄ± BÄ±rak',
-            'update' => 'GÃ¼ncelle',
-            'update_all_plugins' => 'TÃ¼m GÃ¼ncel Eklentileri GÃ¼ncelle',
-            'update_all_themes' => 'TÃ¼m GÃ¼ncel TemalarÄ± GÃ¼ncelle',
-            'update_core' => 'WordPress Ã‡ekirdeÄŸini GÃ¼ncelle',
-            'flush_permalinks' => 'Permalinks Flush',
-            'clear_transients' => 'Transients Temizle',
-            'clear_error_logs' => 'Hata LoglarÄ±nÄ± Temizle',
-            'files_cleared' => 'dosya temizlendi.',
-            'delete_maintenance' => '.maintenance Sil',
-            'sitemap_on' => 'Sitemap Force ON',
-            'sitemap_off' => 'Sitemap Force OFF',
-            'active' => 'Aktif',
-            'inactive' => 'Pasif',
-            'status' => 'Durum',
-            'version' => 'Versiyon',
-            'action' => 'Ä°ÅŸlem',
-            'hint_delete_after' => 'Ã–NEMLÄ°!!! Bu araÃ§ geÃ§icidir. Ä°ÅŸiniz bitince dosyayÄ± silin.',
-            'lang' => 'Dil',
-            'rest_api' => 'REST API',
-            'core_55' => 'WordPress >= 5.5',
-            'blog_public' => 'Arama motorlarÄ±nÄ± engelle',
-            'sitemaps_enabled' => 'wp_sitemaps_enabled',
-            'endpoint' => 'UÃ§ nokta',
-            'http' => 'HTTP',
-            'site' => 'Site',
-            'wp_version' => 'WP SÃ¼rÃ¼m',
-            'php_version' => 'PHP SÃ¼rÃ¼m',
-            'ok' => 'OK',
-            'warn' => 'UYARI',
-            'err' => 'HATA',
-            'full_needed' => 'Bu iÅŸlem iÃ§in WordPress tam yÃ¼klenmeli.',
-            'db_saved' => 'DB bilgileriniz kaydedildi (oturum).',
-            'nonce_confirm' => 'Emin misiniz?',
-            'core_file_count' => 'Ã‡ekirdek Dosya SayÄ±sÄ±',
-            'checksums_api' => 'Checksum API EriÅŸimi',
-            'modified_files' => 'DeÄŸiÅŸtirilmiÅŸ Dosyalar',
-            'missing_files' => 'Eksik Dosyalar',
-            'unknown_files' => 'Bilinmeyen Dosyalar',
-            'file_permissions' => 'Dosya Ä°zinleri',
-            'wp_config_perms' => 'wp-config.php',
-            'dir_perms' => 'Dizinler',
-            'secure_keys' => 'GÃ¼venlik AnahtarlarÄ±',
-            'auth_keys' => 'AUTH_KEY vb.',
-            'admin_user' => 'Admin KullanÄ±cÄ± AdÄ±',
-            'directory_listing' => 'Dizin Listeleme',
-            'readme_license' => 'Readme/License DosyalarÄ±',
-            'home_url' => 'Ana URL (home_url)',
-            'site_url' => 'Site URL (site_url)',
-            'mixed_content' => 'KarÄ±ÅŸÄ±k Ä°Ã§erik',
-            'https_redirect' => 'HTTPS YÃ¶nlendirme',
-            'ext_loaded' => 'YÃ¼klÃ¼ UzantÄ±lar',
-            'recommended' => 'Ã–nerilen',
-            'actual' => 'Mevcut',
-            'php_limits' => 'PHP Limitleri',
-            'no_update' => 'GÃ¼ncelleme Gerekmiyor',
-            'debug_log' => 'Hata GÃ¼nlÃ¼ÄŸÃ¼ (Debug Log)',
-            'export_json' => 'Raporu DÄ±ÅŸa Aktar (JSON)',
-            'checksum_api_error_1' => 'Checksum API\'den alÄ±namadÄ±.',
-            'checksum_api_error_2' => 'Checksum verisi eksik.',
-            'admin_user_exists' => 'Admin kullanÄ±cÄ±sÄ± mevcut.',
-            'admin_user_not_found' => 'Admin kullanÄ±cÄ±sÄ± bulunamadÄ±.',
-            'all_keys_ok' => 'TÃ¼m anahtarlar tanÄ±mlÄ±.',
-            'some_keys_missing' => 'BazÄ± gÃ¼venlik anahtarlarÄ± eksik.',
-            'files_removed' => 'KaldÄ±rÄ±lmÄ±ÅŸ.',
-            'files_present_remove' => 'Mevcut. GÃ¼venlik iÃ§in kaldÄ±rÄ±n.',
-            'url_consistency_ok' => 'URL\'ler tutarlÄ±.',
-            'https_in_use' => 'HTTPS kullanÄ±lÄ±yor.',
-            'https_not_in_use' => 'HTTPS kullanÄ±lmÄ±yor.',
-            'redirect_check_failed' => 'YÃ¶nlendirme kontrol edilemedi:',
-            'http_status_code' => 'HTTP Durumu:',
-            'mixed_content_found' => 'Ayarlarda potansiyel karma iÃ§erik bulundu.',
-            'mixed_content_ok' => 'Ayarlarda belirgin karma iÃ§erik sorunu bulunamadÄ±.',
-            'debug_log_not_found' => 'Hata gÃ¼nlÃ¼ÄŸÃ¼ bulunamadÄ± ya da boÅŸ.',
-            'clear_plugin_transient' => 'Eklenti GÃ¼ncelleme Ã–nbelleÄŸini Temizle',
-            'clear_theme_transient' => 'Tema GÃ¼ncelleme Ã–nbelleÄŸini Temizle',
-        ];
-        $EN = [
-            'title' => 'WP Diagnose',
-            'reload' => 'Rescan',
-            'mode_full' => 'Full Mode',
-            'mode_db' => 'DB Mode',
-            'general' => 'Overview',
-            'integrity' => 'Core Integrity (Checksums)',
-            'security' => 'Security Quick Wins',
-            'urls' => 'URL Consistency & HTTPS',
-            'seo' => 'SEO & Sitemap',
-            'plugins' => 'Plugins',
-            'themes' => 'Themes',
-            'updates' => 'Updates',
-            'tools' => 'Tools',
-            'server' => 'Server/PHP',
-            'db_mode_form_title' => 'DB Mode â€“ WordPress not loaded. Enter database credentials:',
-            'db_host' => 'DB Host',
-            'db_name' => 'DB Name',
-            'db_user' => 'DB User',
-            'db_pass' => 'DB Password',
-            'db_prefix' => 'Table Prefix',
-            'save' => 'Save',
-            'full_only' => '(requires Full Mode)',
-            'activate' => 'Activate',
-            'deactivate' => 'Deactivate',
-            'update' => 'Update',
-            'update_all_plugins' => 'Update All Upgradable Plugins',
-            'update_all_themes' => 'Update All Upgradable Themes',
-            'update_core' => 'Update WordPress Core',
-            'flush_permalinks' => 'Flush Permalinks',
-            'clear_transients' => 'Clear Transients',
-            'clear_error_logs' => 'Clear Error Logs',
-            'files_cleared' => 'files cleared.',
-            'delete_maintenance' => 'Delete .maintenance',
-            'sitemap_on' => 'Sitemap Force ON',
-            'sitemap_off' => 'Sitemap Force OFF',
-            'active' => 'Active',
-            'inactive' => 'Inactive',
-            'status' => 'Status',
-            'version' => 'Version',
-            'action' => 'Action',
-            'hint_delete_after' => 'IMPORTANT!!! Temporary tool. Delete this file after use.',
-            'lang' => 'Language',
-            'rest_api' => 'REST API',
-            'core_55' => 'WordPress >= 5.5',
-            'blog_public' => 'Discourage search engines',
-            'sitemaps_enabled' => 'wp_sitemaps_enabled',
-            'endpoint' => 'Endpoint',
-            'http' => 'HTTP',
-            'site' => 'Site',
-            'wp_version' => 'WP Version',
-            'php_version' => 'PHP Version',
-            'ok' => 'OK',
-            'warn' => 'WARN',
-            'err' => 'ERROR',
-            'full_needed' => 'This operation requires WordPress fully loaded.',
-            'db_saved' => 'DB credentials stored in session.',
-            'nonce_confirm' => 'Are you sure?',
-            'core_file_count' => 'Core File Count',
-            'checksums_api' => 'Checksum API Access',
-            'modified_files' => 'Modified Files',
-            'missing_files' => 'Missing Files',
-            'unknown_files' => 'Unknown Files',
-            'file_permissions' => 'File Permissions',
-            'wp_config_perms' => 'wp-config.php',
-            'dir_perms' => 'Directories',
-            'secure_keys' => 'Secure Keys',
-            'auth_keys' => 'AUTH_KEY etc.',
-            'admin_user' => 'Admin Username',
-            'directory_listing' => 'Directory Listing',
-            'readme_license' => 'Readme/License Files',
-            'home_url' => 'Home URL (home_url)',
-            'site_url' => 'Site URL (site_url)',
-            'mixed_content' => 'Mixed Content',
-            'https_redirect' => 'HTTPS Redirect',
-            'ext_loaded' => 'Loaded Extensions',
-            'recommended' => 'Recommended',
-            'actual' => 'Actual',
-            'php_limits' => 'PHP Limits',
-            'no_update' => 'No Update Needed',
-            'debug_log' => 'Debug Log',
-            'export_json' => 'Export Report (JSON)',
-            'checksum_api_error_1' => 'Could not retrieve checksums from API.',
-            'checksum_api_error_2' => 'Checksum data missing.',
-            'admin_user_exists' => 'Admin user exists.',
-            'admin_user_not_found' => 'No "admin" user found.',
-            'all_keys_ok' => 'All keys are defined.',
-            'some_keys_missing' => 'Some security keys are missing.',
-            'files_removed' => 'Removed.',
-            'files_present_remove' => 'Present. Remove them for security.',
-            'url_consistency_ok' => 'URLs are consistent.',
-            'https_in_use' => 'Using HTTPS.',
-            'https_not_in_use' => 'Not using HTTPS.',
-            'redirect_check_failed' => 'Could not check redirect:',
-            'http_status_code' => 'HTTP Status:',
-            'mixed_content_found' => 'Potentially mixed content found in options.',
-            'mixed_content_ok' => 'No obvious mixed content issues found in options.',
-            'debug_log_not_found' => 'Debug log not found or empty.',
-            'clear_plugin_transient' => 'Clear Plugin Update Cache',
-            'clear_theme_transient' => 'Clear Theme Update Cache',
-        ];
-    }
-    return ($GLOBALS['LANG'] === 'tr' ? ($TR[$key] ?? $key) : ($EN[$key] ?? $key));
-}
-function h($s)
-{
-    return htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
-}
-function badge($type)
-{
-    $label = ['OK' => t('ok'), 'WARN' => t('warn'), 'ERROR' => t('err')][$type] ?? $type;
-    $class = strtolower($type);
-    return '<span class="badge badge-' . $class . '">' . $label . '</span>';
-}
-
-// WordPress load attempt moved up.
-
 // -------------------- DB Mode Helper --------------------
 class WPD_DB
 {
@@ -456,7 +224,7 @@ class WPD_DB
     {
         $this->mysqli = @new mysqli($h, $u, $p, $d);
         if ($this->mysqli->connect_errno)
-            throw new Exception($this->mysqli->connect_error);
+            throw new \Exception($this->mysqli->connect_error);
         $this->mysqli->set_charset('utf8mb4');
         $this->prefix = $pref;
     }
@@ -494,47 +262,30 @@ class WPD_DB
             $stmt->close();
         }
     }
-    function get_user($login)
-    {
-        $stmt = $this->mysqli->prepare("SELECT ID FROM {$this->prefix}users WHERE user_login=?");
-        $stmt->bind_param("s", $login);
-        $stmt->execute();
-        $stmt->store_result();
-        $count = $stmt->num_rows;
-        $stmt->close();
-        return $count;
-    }
 }
 
-// Helper to get all options for mixed content check
-function wpd_get_all_options()
-{
-    global $wpdb;
-    return $wpdb->get_results("SELECT option_name, option_value FROM {$wpdb->options}");
-}
-
-// Store DB creds in session if posted
-if (isset($_POST['dbsave']) && !empty($_POST['_nonce'])) {
-    check_nonce();
-    $_SESSION['db_host'] = trim($_POST['db_host'] ?? '');
-    $_SESSION['db_name'] = trim($_POST['db_name'] ?? '');
-    $_SESSION['db_user'] = trim($_POST['db_user'] ?? '');
-    $_SESSION['db_pass'] = (string) ($_POST['db_pass'] ?? '');
-    $_SESSION['db_prefix'] = trim($_POST['db_prefix'] ?? 'wp_');
-    $_SESSION['db_msg'] = t('db_saved');
-    wpd_log_action('DB_CREDENTIALS_SAVED', 'DB Host: ' . $_SESSION['db_host']);
-    header("Location: " . $_SERVER['PHP_SELF'] . "?token=" . DIAG_TOKEN . "#general");
-    exit;
-}
-
-// Try construct DB object in DB Mode
+// -------------------- Emergency Independent DB Connection (No WP Core) --------------------
 $DB = null;
 $DB_ERR = '';
-if (!$WP_LOADED && !empty($_SESSION['db_host'])) {
-    try {
-        $DB = new WPD_DB($_SESSION['db_host'], $_SESSION['db_user'], $_SESSION['db_pass'], $_SESSION['db_name'], $_SESSION['db_prefix'] ?: 'wp_');
-    } catch (Throwable $e) {
-        $DB_ERR = $e->getMessage();
+if (!isset($WP_LOADED) || !$WP_LOADED) {
+    // Try to parse wp-config.php automatically
+    $config_path = ABSPATH . 'wp-config.php';
+    if (is_file($config_path)) {
+        $cfg = file_get_contents($config_path);
+        
+        $db_host = preg_match("/define\(\s*['\"]DB_HOST['\"]\s*,\s*['\"](.*?)['\"]\s*\)/i", $cfg, $m) ? $m[1] : 'localhost';
+        $db_name = preg_match("/define\(\s*['\"]DB_NAME['\"]\s*,\s*['\"](.*?)['\"]\s*\)/i", $cfg, $m) ? $m[1] : '';
+        $db_user = preg_match("/define\(\s*['\"]DB_USER['\"]\s*,\s*['\"](.*?)['\"]\s*\)/i", $cfg, $m) ? $m[1] : '';
+        $db_pass = preg_match("/define\(\s*['\"]DB_PASSWORD['\"]\s*,\s*['\"](.*?)['\"]\s*\)/i", $cfg, $m) ? $m[1] : '';
+        $table_prefix = preg_match("/\\\$table_prefix\s*=\s*['\"](.*?)['\"]/i", $cfg, $m) ? $m[1] : 'wp_';
+        
+        if ($db_name && $db_user) {
+            try {
+                $DB = new \WPD_DB($db_host, $db_user, $db_pass, $db_name, $table_prefix);
+            } catch (\Throwable $e) {
+                $DB_ERR = $e->getMessage();
+            }
+        }
     }
 }
 
@@ -642,7 +393,85 @@ if (!$WP_LOADED && !empty($_SESSION['db_host'])) {
                                     
                                     <p class="text-sm text-slate-400 leading-relaxed mb-4" x-text="formatFound(finding)"></p>
                                     
-                                    <!-- Action Buttons -->
+                                    <!-- Dynamic Data Table UI (The Scannable Layout) -->
+                                    <template x-if="finding.data && typeof finding.data === 'object'">
+                                        <div class="mb-4 overflow-hidden rounded-lg border border-slate-700/60 shadow-inner bg-slate-900/30">
+                                            <!-- Simple List Array -->
+                                            <template x-if="Array.isArray(finding.data) && typeof finding.data[0] === 'string'">
+                                                <ul class="list-none divide-y divide-slate-800 text-sm text-slate-300 font-mono">
+                                                    <template x-for="item in finding.data" :key="item">
+                                                        <li class="px-4 py-2 hover:bg-slate-800/50 flex items-center gap-2">
+                                                            <span class="w-1.5 h-1.5 bg-rose-500 rounded-full"></span>
+                                                            <span x-text="item" class="break-all"></span>
+                                                        </li>
+                                                    </template>
+                                                </ul>
+                                            </template>
+                                            
+                                            <!-- Scannable Object Array Table -->
+                                            <template x-if="!Array.isArray(finding.data) && typeof Object.values(finding.data)[0] === 'object'">
+                                                <div class="overflow-x-auto">
+                                                    <table class="w-full text-left text-sm text-slate-300">
+                                                        <thead class="text-[10px] uppercase bg-slate-800 text-slate-400 border-b border-slate-700/60 sticky top-0">
+                                                            <tr>
+                                                                <th class="px-4 py-3 font-semibold tracking-wider">Asset Details</th>
+                                                                <th class="px-4 py-3 font-semibold tracking-wider w-28 text-center">Status</th>
+                                                                <th class="px-4 py-3 font-semibold tracking-wider w-36 text-right">Action (Independent)</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody class="divide-y divide-slate-800 text-xs">
+                                                            <template x-for="(props, key) in finding.data" :key="key">
+                                                                <tr class="hover:bg-slate-800/50 transition">
+                                                                    <td class="px-4 py-3">
+                                                                        <div class="font-bold text-sky-400 mb-0.5" x-text="props.name || key"></div>
+                                                                        <div class="text-[10px] font-mono text-slate-500 truncate max-w-[200px]" x-text="'Path: ' + key"></div>
+                                                                    </td>
+                                                                    <td class="px-4 py-3 text-center">
+                                                                        <span :class="props.active ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'bg-slate-700/50 text-slate-400 border-slate-600'" class="px-2 py-0.5 text-[9px] uppercase font-bold border rounded-full tracking-wide" x-text="props.active ? 'ACTIVE' : 'INACTIVE'"></span>
+                                                                    </td>
+                                                                    <td class="px-4 py-3 text-right">
+                                                                        <!-- Togglers -->
+                                                                        <button x-show="id === 'manage_plugins'" @click="attemptFix(agent, 'toggle_plugin:' + key)" class="text-[10px] px-3 py-1.5 rounded bg-slate-800 border disabled:opacity-30 border-slate-700 hover:border-amber-500 hover:text-amber-400 transition ml-auto" x-text="props.active ? 'Deactivate' : 'Activate'"></button>
+                                                                        <button x-show="id === 'manage_themes' && !props.active" @click="attemptFix(agent, 'theme_activate:' + key)" class="text-[10px] px-3 py-1.5 rounded bg-slate-800 border disabled:opacity-30 border-slate-700 hover:border-sky-500 hover:text-sky-400 transition ml-auto">Activate Theme</button>
+                                                                    </td>
+                                                                </tr>
+                                                            </template>
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </template>
+                                            
+                                            <!-- Simple Key-Value Config / Toggles -->
+                                            <template x-if="!Array.isArray(finding.data) && typeof Object.values(finding.data)[0] === 'string'">
+                                                <div class="grid grid-cols-1 md:grid-cols-2 gap-2 p-3 bg-slate-900">
+                                                    <template x-for="(val, k) in finding.data" :key="k">
+                                                        <div class="flex items-center justify-between p-2 rounded bg-slate-800/80 border border-slate-700 group hover:border-sky-500/50 transition">
+                                                            <div class="text-xs font-mono font-bold text-slate-300" x-text="k"></div>
+                                                            <div class="flex items-center gap-3">
+                                                                <span class="text-xs px-2 py-0.5 rounded bg-black/30" x-text="val" :class="val==='true' || val==='active' || val==='ready' ? 'text-emerald-400' : 'text-slate-400'"></span>
+                                                                
+                                                                <!-- Quick Actions for God Mode & Config -->
+                                                                <button x-show="k==='WP_DEBUG'" @click="attemptFix(agent, 'toggle_wp_debug')" class="text-sky-400 hover:text-white px-2 py-0.5 rounded border border-sky-400/30 hover:bg-sky-500/20 text-[10px] uppercase font-bold">Toggle</button>
+                                                                <button x-show="k==='SAVEQUERIES'" @click="attemptFix(agent, 'toggle_savequeries')" class="text-sky-400 hover:text-white px-2 py-0.5 rounded border border-sky-400/30 hover:bg-sky-500/20 text-[10px] uppercase font-bold">Toggle</button>
+                                                                <button x-show="k==='maintenance_mode'" @click="attemptFix(agent, 'toggle_maintenance')" class="text-amber-400 hover:text-white px-2 py-0.5 rounded border border-amber-400/30 hover:bg-amber-500/20 text-[10px] uppercase font-bold">Toggle</button>
+                                                                <button x-show="k==='cache_clear'" @click="attemptFix(agent, 'clear_cache')" class="text-rose-400 hover:text-white px-2 py-0.5 rounded border border-rose-400/30 hover:bg-rose-500/20 text-[10px] uppercase font-bold">Flush DB+FS</button>
+                                                                <button x-show="k==='password_reset'" @click="const u=prompt('Enter Admin Username to Reset:'); if(u) attemptFix(agent, 'reset_admin:'+u);" class="text-purple-400 hover:text-white px-2 py-0.5 rounded border border-purple-400/30 hover:bg-purple-500/20 text-[10px] uppercase font-bold">Force Reset</button>
+                                                                <button x-show="k==='core_update' && val==='ready'" @click="attemptFix(agent, 'core_update')" class="text-emerald-400 hover:text-white px-2 py-0.5 rounded border border-emerald-400/30 hover:bg-emerald-500/20 text-[10px] uppercase font-bold">Try In-Place Update</button>
+                                                            </div>
+                                                        </div>
+                                                    </template>
+                                                    
+                                                    <!-- Error Log explicitly added to operations -->
+                                                    <div x-show="id==='god_mode_tools'" class="flex items-center justify-between p-2 rounded bg-slate-800/80 border border-slate-700 group hover:border-rose-500/50 transition">
+                                                        <div class="text-xs font-mono font-bold text-rose-300">EMERGENCY_LOG</div>
+                                                        <button @click="showErrorLog(agent)" class="text-rose-400 hover:text-white px-2 py-0.5 rounded border border-rose-400/30 hover:bg-rose-500/20 text-[10px] uppercase font-bold text-center">View .log</button>
+                                                    </div>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </template>
+                                    
+                                    <!-- Generic Action Buttons -->
                                     <template x-if="finding.status !== 'OK' && (agent === 'ServerInspector' || agent === 'BootstrapInspector' || agent === 'DBHealth')">
                                         <div class="flex gap-2">
                                             <button @click="attemptFix(agent, id)" class="text-[10px] font-bold uppercase tracking-wider bg-emerald-600/20 hover:bg-emerald-600 text-emerald-400 hover:text-white border border-emerald-600/50 px-4 py-2 rounded transition">
@@ -704,6 +533,30 @@ if (!$WP_LOADED && !empty($_SESSION['db_host'])) {
                         this.reports = {};
                     }
                     setTimeout(() => { this.loading = false; }, 600);
+                },
+                async showErrorLog(agent) {
+                    try {
+                        const response = await fetch(`?token=${this.token}&action=fix&agent=${agent}&id=view_error_log&format=json`);
+                        const result = await response.json();
+                        if (result.success && result.data) {
+                            // Create modal manually parsing it
+                            document.body.insertAdjacentHTML('beforeend', `
+                                <div id="errorModal" class="fixed inset-0 bg-slate-900/90 z-50 flex items-center justify-center p-4">
+                                    <div class="bg-black border border-slate-700 w-full max-w-4xl max-h-[85vh] flex flex-col rounded-lg shadow-2xl">
+                                        <div class="flex justify-between items-center p-4 border-b border-slate-800">
+                                            <h3 class="text-rose-500 font-mono font-bold text-sm">Emergency Output: wp-content/debug.log (Last 100 Lines)</h3>
+                                            <button onclick="document.getElementById('errorModal').remove()" class="text-slate-400 hover:text-white font-bold">&times;</button>
+                                        </div>
+                                        <div class="p-4 overflow-y-auto font-mono text-xs text-slate-300 bg-[#0c0c0c] whitespace-pre-wrap leading-relaxed">${result.data.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
+                                    </div>
+                                </div>
+                            `);
+                        } else {
+                            alert(result.message || 'Log empty or unavailable.');
+                        }
+                    } catch (e) {
+                        alert('Could not fetch log over API.');
+                    }
                 },
                 formatFound(finding) {
                     if (typeof finding === 'string') return finding;
