@@ -1,0 +1,35 @@
+# WordPress Diagnose Tool - Git Ignore
+# Exclude operational and temporary artifacts
+
+# Production Bundles
+wp-diagnose-pro.php
+wp-diagnose-new.php
+
+# Security & Audit Logs
+.ht-wp-diagnose.log
+debug.log
+error_log
+
+# Agent & Environment States
+.antigravity/
+.gemini/
+.vscode/
+.idea/
+memory-bank/
+.agents/
+
+# Session & Process Artifacts
+SESSION_*.md
+/tmp/
+*.tmp
+*.log
+
+# Dependencies
+node_modules/
+vendor/
+composer.lock
+
+# OS Junk
+.DS_Store
+Thumbs.db
+desktop.ini
