@@ -1,13 +1,12 @@
 <?php
 /**
- * WP Diagnose v2.0 â€“ Single File, EN/TR, Full & DB Mode
+ * WP Diagnose v0.2.1-beta – Single File, EN/TR, Full & DB Mode
  * A drop-in diagnosis, maintenance, and plugin management tool for WordPress.
- * Upload to root directory as `wp-diagnose.php` â†’ use it â†’ then delete it.
+ * Upload to root directory as `wp-diagnose.php` – use it – then delete it.
  *
  * Author: https://github.com/BigDesigner
  *
- * v2.0 - Security improvements: IP Whitelisting, Token Auth, Audit Logging.
- * v2.1 - Agentic refactor: Object-Oriented Engine & WP-CLI support.
+ * v0.2.1-beta - Fresh start baseline.
  */
 
 require_once __DIR__ . '/Core/DiagnosticInterface.php';
@@ -60,7 +59,7 @@ if ($is_api_request) {
 // Start output buffering immediately so any stray output can be discarded before JSON output.
 ob_start();
 
-// -------------------- V2 SECURITY CONFIGURATION --------------------
+// -------------------- 0.2.1-beta SECURITY CONFIGURATION --------------------
 define('DIAG_TOKEN', 'SECURE_TOKEN_2026'); // Usage: wp-diagnose.php?token=SECURE_TOKEN_2026
 define('ALLOWED_IPS', ['127.0.0.1', '::1', 'CHANGE_TO_YOUR_STATIC_IP']); // Strict IP Allowlist
 define('LOG_FILE', __DIR__ . '/.ht-wp-diagnose.log');
@@ -80,6 +79,21 @@ if (!isset($_GET['token']) || $_GET['token'] !== DIAG_TOKEN) {
 // -------------------- Try load WordPress --------------------
 $WP_LOADED = false;
 $base = __DIR__;
+
+// If API request, prepare for accidental exit/fatal in wp-load.php
+if ($is_api_request) {
+    register_shutdown_function(function() {
+        if (!defined('ABSPATH') && !headers_sent()) {
+            while (ob_get_level()) ob_end_clean();
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode([
+                'status'  => 'error',
+                'message' => 'WordPress Load Interrupted: Fatal Error or Exit detected during bootstrap.'
+            ], JSON_UNESCAPED_UNICODE);
+        }
+    });
+}
+
 for ($i = 0; $i <= 5; $i++) {
     $cand = $base . '/wp-load.php';
     if (is_file($cand)) {
@@ -87,7 +101,7 @@ for ($i = 0; $i <= 5; $i++) {
             require_once $cand;
             $WP_LOADED = true;
         } catch (\Throwable $e) {
-            // Silently catch exceptions to prevent catastrophic failure if WP is corrupted
+            // Catch fatal errors/exceptions to prevent catastrophic failure
             $WP_LOADED = false;
         }
         break;
@@ -124,14 +138,14 @@ if ($is_json || isset($_GET['action'])) {
                 $response['success'] = \WPDiagnose\Core\Cleanup::fullWipe();
             } elseif ($_GET['action'] === 'fetch_report') {
                 $reports = $engine->getReports();
-                while (ob_get_level() > 0) ob_get_clean(); // Guaranteed clean output
+                while (ob_get_level()) ob_end_clean(); // Guaranteed clean output
                 header('Content-Type: application/json; charset=utf-8');
                 echo json_encode($reports, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
                 exit;
             }
 
             if ($is_json) {
-                while (ob_get_level() > 0) ob_get_clean(); // Purge all buffers completely
+                while (ob_get_level()) ob_end_clean(); // Purge all buffers completely
                 header('Content-Type: application/json; charset=utf-8');
                 echo json_encode($response, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
                 exit;
@@ -140,7 +154,7 @@ if ($is_json || isset($_GET['action'])) {
 
         if ($is_json) {
             $reports = $engine->getReports();
-            while (ob_get_level() > 0) ob_get_clean(); // Fallback for format=json
+            while (ob_get_level()) ob_end_clean(); // Fallback for format=json
             header('Content-Type: application/json; charset=utf-8');
             echo json_encode($reports, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
             exit;
@@ -148,7 +162,7 @@ if ($is_json || isset($_GET['action'])) {
         
     } catch (\Throwable $e) {
         if ($is_json) {
-            while (ob_get_level() > 0) ob_get_clean();
+            while (ob_get_level()) ob_end_clean();
             header('Content-Type: application/json; charset=utf-8');
             echo json_encode([
                 'status'  => 'error', 
@@ -167,7 +181,7 @@ function wpd_log_action($action, $details = '') {
     @file_put_contents(LOG_FILE, $message, FILE_APPEND | LOCK_EX);
 }
 
-// -------------------- Self-Destruct Mechanism (V2 Enhanced) --------------------
+// -------------------- Self-Destruct Mechanism (0.2.1-beta Enhanced) --------------------
 $self_destruct_file = __FILE__;
 $expiration_time = 3600; // 60 minutes in seconds
 $file_age = time() - filemtime(__FILE__);
@@ -524,13 +538,13 @@ if (!$WP_LOADED && !empty($_SESSION['db_host'])) {
     }
 }
 
-// -------------------- Modern SPA Dashboard (V2.1-PRO) --------------------
+// -------------------- Modern SPA Dashboard (v0.2.1-beta) --------------------
 ?><!DOCTYPE html>
 <html lang="en" class="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WP Diagnose PRO v2.2.3</title>
+    <title>WP Diagnose PRO v0.2.1-beta</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <style>
@@ -549,7 +563,7 @@ if (!$WP_LOADED && !empty($_SESSION['db_host'])) {
             <div>
                 <h1 class="text-3xl font-black text-emerald-500 flex items-center gap-3">
                     <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
-                    WP DIAGNOSE <span class="text-sm font-mono bg-slate-800 text-slate-400 px-3 py-1 rounded-full">v2.2.3-PRO</span>
+                    WP DIAGNOSE <span class="text-sm font-mono bg-slate-800 text-slate-400 px-3 py-1 rounded-full">v0.2.1-beta</span>
                 </h1>
                 <p class="text-slate-500 text-xs mt-1 font-mono uppercase tracking-widest">Advanced Diagnostic Agents Swarm</p>
             </div>
@@ -582,7 +596,7 @@ if (!$WP_LOADED && !empty($_SESSION['db_host'])) {
                 </div>
                 <div class="bg-slate-800/50 p-4 rounded-lg border border-slate-700">
                     <span class="text-slate-500 text-xs font-bold uppercase block mb-1">Audit Mode</span>
-                    <span class="text-slate-400 font-mono text-sm block truncate">V2 Agentic Collective</span>
+                    <span class="text-slate-400 font-mono text-sm block truncate">v0.2.1-beta Agentic Collective</span>
                 </div>
             </div>
 
@@ -646,7 +660,7 @@ if (!$WP_LOADED && !empty($_SESSION['db_host'])) {
 
         <!-- Footer -->
         <footer class="max-w-6xl mx-auto mt-20 pt-10 border-t border-slate-700/50 text-center mb-10">
-            <p class="text-slate-600 text-[10px] font-mono uppercase tracking-[0.2em]">WP Diagnose Agentic Swarm v2.2.3-PRO &copy; 2026</p>
+            <p class="text-slate-600 text-[10px] font-mono uppercase tracking-[0.2em]">WP Diagnose Agentic Swarm v0.2.1-beta &copy; 2026</p>
         </footer>
     </div>
 
