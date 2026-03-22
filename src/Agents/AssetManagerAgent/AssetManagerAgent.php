@@ -125,8 +125,7 @@ class AssetManagerAgent implements DiagnosticInterface
 
     private function getThemesStatus(): array
     {
-        $stylesheets = (array) $this->getOption('stylesheet', '');
-        $currentTheme = reset($stylesheets);
+        $currentTheme = (string) $this->getOption('stylesheet', '');
 
         $themes = [];
         $themeDir = ABSPATH . 'wp-content/themes/';
@@ -152,17 +151,6 @@ class AssetManagerAgent implements DiagnosticInterface
 
     private function togglePlugin(string $pluginRelPath): bool
     {
-        if ($this->isWpLoaded && function_exists('deactivate_plugins')) {
-            require_once ABSPATH . 'wp-admin/includes/plugin.php';
-            if (is_plugin_active($pluginRelPath)) {
-                deactivate_plugins($pluginRelPath, true);
-                return true;
-            } else {
-                $r = activate_plugin($pluginRelPath, '', false, false);
-                return !is_wp_error($r);
-            }
-        }
-
         $activePlugins = $this->getOption('active_plugins', []);
         if (!is_array($activePlugins)) $activePlugins = [];
 
@@ -179,11 +167,6 @@ class AssetManagerAgent implements DiagnosticInterface
 
     private function activateTheme(string $themeSlug): bool
     {
-        if ($this->isWpLoaded && function_exists('switch_theme')) {
-            switch_theme($themeSlug);
-            return true;
-        }
-
         $themeDir = ABSPATH . 'wp-content/themes/' . $themeSlug;
         if (!is_dir($themeDir)) return false;
 
@@ -202,10 +185,6 @@ class AssetManagerAgent implements DiagnosticInterface
 
     private function getOption(string $name, $default = null)
     {
-        if ($this->isWpLoaded && function_exists('get_option')) {
-            return get_option($name, $default);
-        }
-
         global $DB;
         if ($DB) {
             $val = $DB->get_option($name);
@@ -219,10 +198,6 @@ class AssetManagerAgent implements DiagnosticInterface
 
     private function updateOption(string $name, $value): bool
     {
-        if ($this->isWpLoaded && function_exists('update_option')) {
-            return update_option($name, $value);
-        }
-
         global $DB;
         if ($DB) {
             $serialized = is_array($value) || is_object($value) ? serialize($value) : $value;

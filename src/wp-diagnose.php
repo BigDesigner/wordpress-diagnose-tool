@@ -65,7 +65,7 @@ if ($is_api_request) {
 // Start output buffering immediately so any stray output can be discarded before JSON output.
 ob_start();
 
-// -------------------- 0.2.2-beta SECURITY CONFIGURATION --------------------
+// -------------------- 0.2.4-beta SECURITY CONFIGURATION --------------------
 define('DIAG_TOKEN', 'SECURE_TOKEN_2026'); // Usage: wp-diagnose.php?token=SECURE_TOKEN_2026
 define('ALLOWED_IPS', ['127.0.0.1', '::1', 'CHANGE_TO_YOUR_STATIC_IP']); // Strict IP Allowlist
 define('LOG_FILE', __DIR__ . '/.ht-wp-diagnose.log');
@@ -169,27 +169,26 @@ class WPD_DB
     }
 }
 
-// -------------------- Emergency Independent DB Connection (No WP Core) --------------------
+// -------------------- Emergency Independent DB Connection --------------------
 $DB = null;
 $DB_ERR = '';
-if (!isset($WP_LOADED) || !$WP_LOADED) {
-    // Try to parse wp-config.php automatically
-    $config_path = ABSPATH . 'wp-config.php';
-    if (is_file($config_path)) {
-        $cfg = file_get_contents($config_path);
-        
-        $db_host = preg_match("/define\(\s*['\"]DB_HOST['\"]\s*,\s*['\"](.*?)['\"]\s*\)/i", $cfg, $m) ? $m[1] : 'localhost';
-        $db_name = preg_match("/define\(\s*['\"]DB_NAME['\"]\s*,\s*['\"](.*?)['\"]\s*\)/i", $cfg, $m) ? $m[1] : '';
-        $db_user = preg_match("/define\(\s*['\"]DB_USER['\"]\s*,\s*['\"](.*?)['\"]\s*\)/i", $cfg, $m) ? $m[1] : '';
-        $db_pass = preg_match("/define\(\s*['\"]DB_PASSWORD['\"]\s*,\s*['\"](.*?)['\"]\s*\)/i", $cfg, $m) ? $m[1] : '';
-        $table_prefix = preg_match("/\\\$table_prefix\s*=\s*['\"](.*?)['\"]/i", $cfg, $m) ? $m[1] : 'wp_';
-        
-        if ($db_name && $db_user) {
-            try {
-                $DB = new \WPD_DB($db_host, $db_user, $db_pass, $db_name, $table_prefix);
-            } catch (\Throwable $e) {
-                $DB_ERR = $e->getMessage();
-            }
+
+// ALWAYS parse wp-config.php for direct SQL access (bypassing high-level WP ops)
+$config_path = ABSPATH . 'wp-config.php';
+if (is_file($config_path)) {
+    $cfg = file_get_contents($config_path);
+    
+    $db_host = preg_match("/define\(\s*['\"]DB_HOST['\"]\s*,\s*['\"](.*?)['\"]\s*\)/i", $cfg, $m) ? $m[1] : 'localhost';
+    $db_name = preg_match("/define\(\s*['\"]DB_NAME['\"]\s*,\s*['\"](.*?)['\"]\s*\)/i", $cfg, $m) ? $m[1] : '';
+    $db_user = preg_match("/define\(\s*['\"]DB_USER['\"]\s*,\s*['\"](.*?)['\"]\s*\)/i", $cfg, $m) ? $m[1] : '';
+    $db_pass = preg_match("/define\(\s*['\"]DB_PASSWORD['\"]\s*,\s*['\"](.*?)['\"]\s*\)/i", $cfg, $m) ? $m[1] : '';
+    $table_prefix = preg_match("/\\\$table_prefix\s*=\s*['\"](.*?)['\"]/i", $cfg, $m) ? $m[1] : 'wp_';
+    
+    if ($db_name && $db_user) {
+        try {
+            $DB = new \WPD_DB($db_host, $db_user, $db_pass, $db_name, $table_prefix);
+        } catch (\Throwable $e) {
+            $DB_ERR = $e->getMessage();
         }
     }
 }
@@ -271,7 +270,7 @@ function wpd_log_action($action, $details = '') {
     @file_put_contents(LOG_FILE, $message, FILE_APPEND | LOCK_EX);
 }
 
-// -------------------- Self-Destruct Mechanism (0.2.2-beta Enhanced) --------------------
+// -------------------- Self-Destruct Mechanism (0.2.4-beta Enhanced) --------------------
 $self_destruct_file = __FILE__;
 $expiration_time = 3600; // 60 minutes in seconds
 $file_age = time() - filemtime(__FILE__);
@@ -293,13 +292,13 @@ if ($file_age > $expiration_time) {
 
 // WPD_DB and Independent Mode Connection Moved Up
 
-// -------------------- Modern SPA Dashboard (v0.2.2-beta) --------------------
+// -------------------- Modern SPA Dashboard (v0.2.4-beta) --------------------
 ?><!DOCTYPE html>
 <html lang="en" class="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WP Diagnose PRO v0.2.1-beta</title>
+    <title>WP Diagnose PRO v0.2.4-beta</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <style>
@@ -351,7 +350,7 @@ if ($file_age > $expiration_time) {
                 </div>
                 <div class="bg-slate-800/50 p-4 rounded-lg border border-slate-700">
                     <span class="text-slate-500 text-xs font-bold uppercase block mb-1">Audit Mode</span>
-                    <span class="text-slate-400 font-mono text-sm block truncate">v0.2.2-beta Agentic Collective</span>
+                    <span class="text-slate-400 font-mono text-sm block truncate">v0.2.4-beta Agentic Collective</span>
                 </div>
             </div>
 
@@ -374,7 +373,7 @@ if ($file_age > $expiration_time) {
                 <template x-for="(report, agent) in reports" :key="agent">
                     <div x-show="activeTab === 'all' || activeTab === agent" class="bg-slate-800 border border-slate-700/50 rounded-xl shadow-2xl overflow-hidden flex flex-col hover:border-slate-600 transition">
                         <div class="px-6 py-4 bg-slate-800/80 border-t border-slate-700/60 flex justify-between items-center text-xs text-slate-400">
-                            <span class="font-mono">WP Diagnose PRO v0.2.2-beta</span>
+                            <span class="font-mono">WP Diagnose PRO v0.2.4-beta</span>
                             <div class="flex items-center gap-3">
                                 <div class="w-2 h-2 rounded-full bg-emerald-500"></div>
                                 <h2 class="text-lg font-bold text-slate-100 uppercase tracking-tight" x-text="agent"></h2>
@@ -511,7 +510,7 @@ if ($file_age > $expiration_time) {
 
         <!-- Footer -->
         <footer class="max-w-6xl mx-auto mt-20 pt-10 border-t border-slate-700/50 text-center mb-10">
-            <p class="text-slate-600 text-[10px] font-mono uppercase tracking-[0.2em]">WP Diagnose Agentic Swarm v0.2.2-beta &copy; 2026</p>
+            <p class="text-slate-600 text-[10px] font-mono uppercase tracking-[0.2em]">WP Diagnose Agentic Swarm v0.2.4-beta &copy; 2026</p>
         </footer>
     </div>
 
@@ -593,10 +592,27 @@ if ($file_age > $expiration_time) {
                 async attemptFix(agent, id) {
                     if (!confirm(`Trigger Agentic Fix for [${id}]?`)) return;
                     
+                    this.loading = true;
+                    
                     try {
                         const fd = new FormData();
                         fd.append('agent', agent);
                         fd.append('id', id);
+
+                        // Optimistic UI updates mapping BEFORE network completion
+                        if (id.startsWith('toggle_plugin:')) {
+                            const slug = id.split(':')[1];
+                            if (this.reports[agent] && this.reports[agent].manage_plugins && this.reports[agent].manage_plugins.data[slug]) {
+                                this.reports[agent].manage_plugins.data[slug].active = !this.reports[agent].manage_plugins.data[slug].active;
+                            }
+                        } else if (id.startsWith('theme_activate:')) {
+                            const slug = id.split(':')[1];
+                            if (this.reports[agent] && this.reports[agent].manage_themes && this.reports[agent].manage_themes.data) {
+                                for (let t in this.reports[agent].manage_themes.data) {
+                                    this.reports[agent].manage_themes.data[t].active = (t === slug);
+                                }
+                            }
+                        }
 
                         const response = await fetch(`?token=${this.token}&action=fix&format=json`, {
                             method: 'POST',
@@ -604,13 +620,15 @@ if ($file_age > $expiration_time) {
                         });
                         const result = await response.json();
                         if (result.success) {
-                            alert('Action executed successfully! Check status...');
+                            alert('Action executed successfully! Scanning...');
                             this.fetchReport();
                         } else {
                             alert('Recovery failed or blocked. Manual intervention advised.');
+                            this.fetchReport(); // Revert optimistic UI
                         }
                     } catch (e) {
                         alert('API Communication Timeout or Error: ' + e.message);
+                        this.loading = false;
                     }
                 },
                 async selfDestruct() {

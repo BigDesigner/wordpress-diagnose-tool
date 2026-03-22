@@ -67,6 +67,7 @@ class Engine
 
     public function performFix(string $agentName, string $fixId): bool
     {
+        error_log("[WP Diagnose Engine] performAction POST Payload: " . print_r($_POST, true));
         error_log("[WP Diagnose Engine] performAction triggered - Agent: {$agentName}, ActionType: {$fixId}");
         
         if (!isset($this->agents[$agentName])) {
