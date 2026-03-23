@@ -3,14 +3,16 @@ declare(strict_types = 1)
 ;
 
 /**
- * WP Diagnose - Atomic Bracketed Namespace Bundler (v0.2.4-beta)
+ * WP Diagnose - Atomic Bracketed Namespace Bundler
  *
  * Strategy: Convert every module to bracketed namespace { } syntax.
  * This is the ONLY way to have multiple namespaces coexist in one PHP file.
  * Entry point (procedural + inline HTML) is wrapped in namespace { } (global).
  */
 
-$version = '0.2.4-beta';
+require_once __DIR__ . '/scripts/sync-version.php';
+
+$version = syncProjectVersion(__DIR__);
 $outputDir = 'diagnose';
 $output = $outputDir . '/wp-diagnose-pro.php';
 
@@ -20,6 +22,7 @@ if (!is_dir($outputDir)) {
 
 // OOP class modules
 $coreModules = [
+    'Core/Version.php',
     'Core/DiagnosticInterface.php',
     'Core/Engine.php',
     'Core/Cleanup.php',
@@ -82,7 +85,7 @@ $bundle .= "declare(strict_types=1);" . PHP_EOL;
 $bundle .= "/**" . PHP_EOL;
 $bundle .= " * WP DIAGNOSE PRO - Bundled Agentic Toolkit" . PHP_EOL;
 $bundle .= " * Version : $version" . PHP_EOL;
-$bundle .= " * Standard: Bracketed Namespace (Constitution v0.2.4-beta)" . PHP_EOL;
+$bundle .= " * Standard: Bracketed Namespace (Constitution v{$version})" . PHP_EOL;
 $bundle .= " * Built   : " . gmdate('Y-m-d H:i:s') . " UTC" . PHP_EOL;
 $bundle .= " * License : GPL-3.0" . PHP_EOL;
 $bundle .= " */" . PHP_EOL . PHP_EOL;
@@ -135,7 +138,7 @@ if (file_put_contents($output, $bundle) === false) {
     die("FATAL: Cannot write $output — check permissions.\n");
 }
 
-// --- MANDATORY PRE-COMMIT LINT GUARD (CONSTITUTION v0.2.4-beta) ---
+// --- MANDATORY PRE-COMMIT LINT GUARD (CONSTITUTION MATCHES VERSION FILE) ---
 // Strategy: Perform an OS-level syntax validation on the generated bundle.
 // If even a single syntax error is detected, the bundle is destroyed immediately.
 $lintCmd = PHP_BINARY . ' -l ' . escapeshellarg($output) . ' 2>&1';
@@ -169,7 +172,7 @@ if ($lintCode !== 0) {
 $kb = round(filesize($output) / 1024, 2);
 echo "==========================================================\n";
 echo " ✅ Build Successful : $output\n";
-echo " Version            : $version (Constitution v0.2.4-beta compliant)\n";
+echo " Version            : $version (Constitution v{$version} compliant)\n";
 echo " Integrity Check    : 100% PASSED (Pre-Commit Guard)\n";
 echo " File Size          : {$kb} KB\n";
 echo " Status             : READY FOR PRODUCTION\n";

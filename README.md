@@ -1,8 +1,8 @@
-# WP Diagnose PRO (v0.2.4-beta)
+# WP Diagnose PRO (v0.2.5-beta)
 
 **WP Diagnose PRO** is an agentic, modular, and highly secured diagnostic toolkit for WordPress. It is designed for emergency intervention when a site is inaccessible, returning fatal errors, or experiencing database connectivity issues.
 
-## 🚀 Key Features (v0.2.4-beta)
+## Key Features (v0.2.5-beta)
 - **Agentic Orchestration:** Specialized agents for Server, WordPress, Security, and Bootstrap diagnostics.
 - **Modern SPA Dashboard:** A premium, dark-themed interface built with Alpine.js and Tailwind CSS.
 - **Emergency Bootstrap:** Locate and diagnose `wp-config.php` issues without executing corrupted files.
@@ -10,7 +10,7 @@
 - **Professional Bundler:** Single-file deployment strategy via a secure build process.
 - **Hardened Security:** IP Whitelisting, Token Auth, and Recursive Self-Destruct.
 
-## 🛠 Installation & Deployment
+## Installation & Deployment
 
 ### 1. Development (Source)
 Development happens in the `/src` and `/Core` directories. This modularity allows for high maintainability and specialized AI-agent interactions.
@@ -28,8 +28,8 @@ To deploy the tool, you must generate the professional single-file bundle in the
 
 Refer to [docs/DEPLOY.md](/docs/DEPLOY.md) for detailed instructions.
 
-## ⚠️ Security Warning
+## Security Warning
 This tool is powerful and runs with high privileges. **Always use the "Self-Destruct" button immediately after use** to purge the script and its modular components from the server.
 
-## 📄 License
+## License
 This project is licensed under the GNU General Public License v3.0 (GPL-3.0). See the `LICENSE` file for details.
