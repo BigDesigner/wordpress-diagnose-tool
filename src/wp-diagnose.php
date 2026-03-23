@@ -1,12 +1,12 @@
 <?php
 /**
- * WP Diagnose v0.2.1-beta – Single File, EN/TR, Full & DB Mode
+ * WP Diagnose v0.2.4-beta – Single File, EN/TR, Full & DB Mode
  * A drop-in diagnosis, maintenance, and plugin management tool for WordPress.
  * Upload to root directory as `wp-diagnose.php` – use it – then delete it.
  *
  * Author: https://github.com/BigDesigner
  *
- * v0.2.1-beta - Fresh start baseline.
+ * v0.2.4-beta - Current stable beta baseline.
  */
 
 require_once __DIR__ . '/Core/DiagnosticInterface.php';
@@ -317,7 +317,7 @@ if ($file_age > $expiration_time) {
             <div>
                 <h1 class="text-3xl font-black text-emerald-500 flex items-center gap-3">
                     <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
-                    WP DIAGNOSE <span class="text-sm font-mono bg-slate-800 text-slate-400 px-3 py-1 rounded-full">v0.2.1-beta</span>
+                    WP DIAGNOSE <span class="text-sm font-mono bg-slate-800 text-slate-400 px-3 py-1 rounded-full">v0.2.4-beta</span>
                 </h1>
                 <p class="text-slate-500 text-xs mt-1 font-mono uppercase tracking-widest">Advanced Diagnostic Agents Swarm</p>
             </div>
