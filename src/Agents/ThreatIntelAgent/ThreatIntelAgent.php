@@ -187,22 +187,49 @@ final class ThreatIntelAgent implements DiagnosticInterface
             return false;
         }
 
-        $feedUrl = getenv('WPD_WORDFENCE_FEED_URL') ?: 'https://www.wordfence.com/api/intelligence/v3/vulnerabilities/production';
-        $payload = $this->httpGetJson($feedUrl, [
+        $headers = [
             'Authorization: Bearer ' . $apiKey,
             'Accept: application/json',
-        ]);
+            'User-Agent: WP-Diagnose/' . (class_exists('\WPDiagnose\Core\Version') ? \WPDiagnose\Core\Version::current() : 'dev'),
+        ];
 
-        if (!is_array($payload)) {
+        $candidates = [
+            'production' => getenv('WPD_WORDFENCE_FEED_URL') ?: 'https://www.wordfence.com/api/intelligence/v3/vulnerabilities/production',
+            'scanner' => getenv('WPD_WORDFENCE_SCANNER_FEED_URL') ?: 'https://www.wordfence.com/api/intelligence/v3/vulnerabilities/scanner',
+        ];
+
+        $selectedFeed = 'production';
+        $selectedPayload = null;
+        $lastFailure = null;
+
+        foreach ($candidates as $feedType => $feedUrl) {
+            $response = $this->httpGetJson($feedUrl, $headers);
+            if ($response['ok'] && is_array($response['decoded'])) {
+                $selectedFeed = $feedType;
+                $selectedPayload = $response['decoded'];
+                break;
+            }
+
+            $lastFailure = $response;
+            if (($response['status'] ?? 0) === 401 || ($response['status'] ?? 0) === 403) {
+                break;
+            }
+        }
+
+        if (!is_array($selectedPayload)) {
             $this->lastActionResult = [
                 'success' => false,
-                'message' => 'Wordfence Intelligence feed request failed or returned invalid JSON.',
-                'data' => null,
+                'message' => $this->buildFeedFailureMessage($lastFailure),
+                'data' => $lastFailure ? [
+                    'http_status' => $lastFailure['status'],
+                    'content_type' => $lastFailure['content_type'],
+                    'response_preview' => $lastFailure['preview'],
+                ] : null,
             ];
             return false;
         }
 
-        $normalized = $this->normalizeFeed($payload);
+        $normalized = $this->normalizeFeed($selectedPayload);
         $cacheFile = $this->getCacheFilePath();
         $cacheDir = dirname($cacheFile);
         if (!is_dir($cacheDir)) {
@@ -211,6 +238,7 @@ final class ThreatIntelAgent implements DiagnosticInterface
 
         $written = @file_put_contents($cacheFile, json_encode([
             'updated_at' => gmdate('c'),
+            'feed_type' => $selectedFeed,
             'records' => $normalized,
         ], JSON_UNESCAPED_SLASHES));
 
@@ -218,9 +246,9 @@ final class ThreatIntelAgent implements DiagnosticInterface
         $this->lastActionResult = [
             'success' => $success,
             'message' => $success
-                ? 'Threat intelligence feed synced successfully.'
+                ? sprintf('Threat intelligence feed synced successfully using the %s feed.', $selectedFeed)
                 : 'Threat intelligence feed was downloaded but could not be cached locally.',
-            'data' => $success ? ['records' => count($normalized)] : null,
+            'data' => $success ? ['records' => count($normalized), 'feed_type' => $selectedFeed] : null,
         ];
         return $success;
     }
@@ -719,20 +747,28 @@ final class ThreatIntelAgent implements DiagnosticInterface
 
     /**
      * @param array<int, string> $headers
-     * @return array<string, mixed>|null
+     * @return array{ok: bool, status: int, content_type: string, preview: string, error: string, decoded: ?array}
      */
-    private function httpGetJson(string $url, array $headers): ?array
+    private function httpGetJson(string $url, array $headers): array
     {
         if (function_exists('curl_init')) {
             $ch = curl_init($url);
             if ($ch === false) {
-                return null;
+                return [
+                    'ok' => false,
+                    'status' => 0,
+                    'content_type' => '',
+                    'preview' => '',
+                    'error' => 'cURL initialization failed.',
+                    'decoded' => null,
+                ];
             }
 
             curl_setopt_array($ch, [
                 CURLOPT_RETURNTRANSFER => true,
                 CURLOPT_TIMEOUT => 20,
                 CURLOPT_FOLLOWLOCATION => true,
+                CURLOPT_ENCODING => '',
                 CURLOPT_HTTPHEADER => $headers,
                 CURLOPT_SSL_VERIFYPEER => true,
                 CURLOPT_SSL_VERIFYHOST => 2,
@@ -740,14 +776,16 @@ final class ThreatIntelAgent implements DiagnosticInterface
 
             $body = curl_exec($ch);
             $status = curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+            $contentType = (string) curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
+            $error = curl_error($ch);
             curl_close($ch);
 
-            if ($body === false || $status >= 400) {
-                return null;
-            }
-
-            $decoded = json_decode((string) $body, true);
-            return is_array($decoded) ? $decoded : null;
+            return $this->normalizeHttpJsonResponse(
+                $body === false ? '' : (string) $body,
+                (int) $status,
+                $contentType,
+                $error
+            );
         }
 
         $context = stream_context_create([
@@ -755,15 +793,82 @@ final class ThreatIntelAgent implements DiagnosticInterface
                 'method' => 'GET',
                 'timeout' => 20,
                 'header' => implode("\r\n", $headers),
+                'ignore_errors' => true,
             ],
         ]);
 
         $body = @file_get_contents($url, false, $context);
-        if ($body === false) {
-            return null;
+        $status = 0;
+        $contentType = '';
+        if (isset($http_response_header) && is_array($http_response_header)) {
+            foreach ($http_response_header as $headerLine) {
+                if (preg_match('#^HTTP/\S+\s+(\d{3})#i', $headerLine, $match)) {
+                    $status = (int) $match[1];
+                } elseif (stripos($headerLine, 'Content-Type:') === 0) {
+                    $contentType = trim(substr($headerLine, strlen('Content-Type:')));
+                }
+            }
         }
 
+        return $this->normalizeHttpJsonResponse(
+            $body === false ? '' : (string) $body,
+            $status,
+            $contentType,
+            $body === false ? 'HTTP request failed.' : ''
+        );
+    }
+
+    /**
+     * @return array{ok: bool, status: int, content_type: string, preview: string, error: string, decoded: ?array}
+     */
+    private function normalizeHttpJsonResponse(string $body, int $status, string $contentType, string $error): array
+    {
         $decoded = json_decode($body, true);
-        return is_array($decoded) ? $decoded : null;
+        $preview = trim(substr(preg_replace('/\s+/', ' ', $body) ?? '', 0, 220));
+
+        return [
+            'ok' => $body !== '' && $status < 400 && is_array($decoded),
+            'status' => $status,
+            'content_type' => $contentType,
+            'preview' => $preview,
+            'error' => $error,
+            'decoded' => is_array($decoded) ? $decoded : null,
+        ];
+    }
+
+    /**
+     * @param array{ok: bool, status: int, content_type: string, preview: string, error: string, decoded: ?array}|null $failure
+     */
+    private function buildFeedFailureMessage(?array $failure): string
+    {
+        if ($failure === null) {
+            return 'Wordfence Intelligence feed request failed before a response was received.';
+        }
+
+        if ($failure['status'] === 401 || $failure['status'] === 403) {
+            return 'Wordfence rejected the API key. Please use a Wordfence Intelligence V3 API key from the Integrations page.';
+        }
+
+        if ($failure['status'] === 429) {
+            return 'Wordfence rate-limited the feed request. Please wait a bit and try Sync Feed again.';
+        }
+
+        if ($failure['error'] !== '') {
+            return 'Feed sync failed during the HTTPS request: ' . $failure['error'];
+        }
+
+        if ($failure['status'] >= 400) {
+            return sprintf(
+                'Feed sync failed with HTTP %d. Response preview: %s',
+                $failure['status'],
+                $failure['preview'] !== '' ? $failure['preview'] : 'empty response'
+            );
+        }
+
+        if ($failure['preview'] !== '') {
+            return 'Wordfence returned a non-JSON response. Preview: ' . $failure['preview'];
+        }
+
+        return 'Wordfence returned an empty response. This is usually an outbound HTTPS or host-level filtering issue.';
     }
 }

@@ -311,10 +311,10 @@ if ($file_age > $expiration_time) {
     wpd_log_action('AUTO_DESTRUCT', 'TTL exceeded 60 minutes. Initiating self-destruct.');
     if (\WPDiagnose\Core\Cleanup::fullWipe()) {
         header('Content-Type: text/html; charset=utf-8');
-        exit('<div style="background:#000;color:#00b84f;padding:20px;text-align:center;">WP Diagnose dosyasi ve tum yardimci moduller guvenlik icin silinmistir.</div>');
+        exit('<div style="background:#000;color:#00b84f;padding:20px;text-align:center;">WP Diagnose and all helper modules were removed for security.</div>');
     } else {
         header('Content-Type: text/html; charset=utf-8');
-        exit('<div style="background:#000;color:#ef4444;padding:20px;text-align:center;">UYARI: Dosyalar otomatik olarak silinemedi. Lutfen guvenlik icin manuel olarak silin.</div>');
+        exit('<div style="background:#000;color:#ef4444;padding:20px;text-align:center;">Warning: Files could not be removed automatically. Please delete them manually for security.</div>');
     }
 }
 // -------------------- End Self-Destruct --------------------
@@ -490,7 +490,7 @@ if ($file_age > $expiration_time) {
                                                 <div>
                                                     <div class="text-xs font-bold uppercase tracking-[0.25em] text-emerald-400">Wordfence Intelligence</div>
                                                     <div class="mt-1 text-xs text-slate-400">
-                                                        Free API key girersen live WordPress CVE feed aktif olur. Girilmezse bu alan pasif kalir.
+                                                        Add a free API key to enable the live WordPress CVE feed. Without a key, this section stays passive.
                                                     </div>
                                                 </div>
                                                 <a
@@ -753,25 +753,25 @@ if ($file_age > $expiration_time) {
                         if (!contentType.includes('application/json')) {
                             const raw = await response.text();
                             console.error('[WP Diagnose] Non-JSON response from API:', raw.substring(0, 500));
-                            this.notify('API baglanti hatasi: sunucu JSON formatinda yanit vermedi.', 'error');
+                            this.notify('API connection error: server did not return JSON.', 'error');
                             this.reports = {};
                         } else {
                             try {
                                 this.reports = await response.json();
                                 this.hydrateThreatIntelState();
                                 if (this.reports.status === 'error' || (this.reports.success === false && this.reports.message)) {
-                                    this.notify('API baglanti hatasi: ' + this.reports.message, 'error');
+                                    this.notify('API connection error: ' + this.reports.message, 'error');
                                     this.reports = {};
                                 }
                             } catch (parseErr) {
                                 console.error('[WP Diagnose] JSON Parse failed:', parseErr);
-                                this.notify('API baglanti hatasi: gelen JSON verisi ayrıştırılamadı.', 'error');
+                                this.notify('API connection error: response JSON could not be parsed.', 'error');
                                 this.reports = {};
                             }
                         }
                     } catch (e) {
                         console.error('[WP Diagnose] Network error:', e);
-                        this.notify('API baglanti hatasi: sunucuya ulasilamiyor veya baglanti koptu.', 'error');
+                        this.notify('API connection error: server is unreachable or the connection was interrupted.', 'error');
                         this.reports = {};
                     }
                     setTimeout(() => { this.loading = false; }, 600);
