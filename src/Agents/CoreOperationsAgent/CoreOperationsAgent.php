@@ -32,6 +32,7 @@ class CoreOperationsAgent implements DiagnosticInterface
 
         // Check toggles from wp-config
         $configVars = $this->parseWpConfig();
+        $logDiagnostics = $this->getDebugLogDiagnostics($this->resolveDebugLogPathFromConfig($configVars));
         
         $this->results['config_toggles'] = [
             'status' => 'OK',
@@ -40,7 +41,8 @@ class CoreOperationsAgent implements DiagnosticInterface
                 'WP_DEBUG' => $configVars['WP_DEBUG'] ?? 'false',
                 'WP_DEBUG_DISPLAY' => $configVars['WP_DEBUG_DISPLAY'] ?? 'false',
                 'WP_DEBUG_LOG' => $configVars['WP_DEBUG_LOG'] ?? 'false',
-                'DEBUG_LOG_FILE' => $this->resolveDebugLogPath(),
+                'DEBUG_LOG_FILE' => $logDiagnostics['active_path'],
+                'DEBUG_LOG_STATUS' => $logDiagnostics['status'],
                 'SAVEQUERIES' => $configVars['SAVEQUERIES'] ?? 'false',
                 'WP_ENVIRONMENT_TYPE' => $configVars['WP_ENVIRONMENT_TYPE'] ?? 'production',
             ],
@@ -55,7 +57,7 @@ class CoreOperationsAgent implements DiagnosticInterface
                 'cache_clear'      => 'ready',
                 'password_reset'   => 'ready',
                 'core_update'      => $this->getCurrentWordPressVersion() ? 'ready' : 'unavailable',
-                'debug_log_viewer' => is_file($this->resolveDebugLogPath()) ? 'ready' : 'waiting',
+                'debug_log_viewer' => $logDiagnostics['viewer_status'],
             ],
         ];
 
@@ -102,26 +104,16 @@ class CoreOperationsAgent implements DiagnosticInterface
         $configPath = $this->locateWpConfigPath();
         if (!is_file($configPath)) return [];
 
-        $content = file_get_contents($configPath);
+        $content = (string) file_get_contents($configPath);
         $vars = [];
-        
-        if (preg_match("/define\(\s*['\"]WP_DEBUG['\"]\s*,\s*(true|false)\s*\)/i", $content, $matches)) {
-            $vars['WP_DEBUG'] = strtolower($matches[1]);
+
+        foreach (['WP_DEBUG', 'WP_DEBUG_DISPLAY', 'WP_DEBUG_LOG', 'SAVEQUERIES', 'WP_ENVIRONMENT_TYPE'] as $constant) {
+            $rawValue = $this->extractConfigConstantValue($content, $constant);
+            if ($rawValue !== null) {
+                $vars[$constant] = $this->normalizeConfigValueForDisplay($rawValue);
+            }
         }
-        if (preg_match("/define\(\s*['\"]WP_DEBUG_DISPLAY['\"]\s*,\s*(true|false)\s*\)/i", $content, $matches)) {
-            $vars['WP_DEBUG_DISPLAY'] = strtolower($matches[1]);
-        }
-        if (preg_match("/define\(\s*['\"]WP_DEBUG_LOG['\"]\s*,\s*(true|false)\s*\)/i", $content, $matches)) {
-            $vars['WP_DEBUG_LOG'] = strtolower($matches[1]);
-        } elseif (preg_match("/define\(\s*['\"]WP_DEBUG_LOG['\"]\s*,\s*['\"]([^'\"]+)['\"]\s*\)/i", $content, $matches)) {
-            $vars['WP_DEBUG_LOG'] = $matches[1];
-        }
-        if (preg_match("/define\(\s*['\"]SAVEQUERIES['\"]\s*,\s*(true|false)\s*\)/i", $content, $matches)) {
-            $vars['SAVEQUERIES'] = strtolower($matches[1]);
-        }
-        if (preg_match("/define\(\s*['\"]WP_ENVIRONMENT_TYPE['\"]\s*,\s*['\"]([^'\"]+)['\"]\s*\)/i", $content, $matches)) {
-            $vars['WP_ENVIRONMENT_TYPE'] = $matches[1];
-        }
+
         return $vars;
     }
 
@@ -137,10 +129,11 @@ class CoreOperationsAgent implements DiagnosticInterface
             return false;
         }
 
-        $content = file_get_contents($configPath);
+        $content = (string) file_get_contents($configPath);
         $currentDebug = 'false';
-        if (preg_match("/define\(\s*['\"]WP_DEBUG['\"]\s*,\s*(true|false)\s*\)/i", $content, $matches)) {
-            $currentDebug = strtolower($matches[1]);
+        $rawCurrentDebug = $this->extractConfigConstantValue($content, 'WP_DEBUG');
+        if ($rawCurrentDebug !== null) {
+            $currentDebug = strtolower($this->normalizeConfigValueForDisplay($rawCurrentDebug));
         }
 
         $newDebug = $currentDebug === 'true' ? 'false' : 'true';
@@ -161,30 +154,39 @@ class CoreOperationsAgent implements DiagnosticInterface
         }
 
         $written = file_put_contents($configPath, $content) !== false;
+        $bootstrapResult = $newDebug === 'true' ? $this->bootstrapDebugLogFile($debugLogPath) : true;
+        $success = $written && $bootstrapResult;
         $this->lastActionResult = [
-            'success' => $written,
-            'message' => $written
+            'success' => $success,
+            'message' => $success
                 ? ($newDebug === 'true'
                     ? "WP_DEBUG enabled. Logs will be written to {$debugLogPath} with display disabled."
                     : 'WP_DEBUG disabled. Display remains off and log target is preserved.')
-                : 'Failed to write updated WP_DEBUG settings to wp-config.php.',
+                : ($written
+                    ? "WP_DEBUG constants were updated, but the debug log file could not be prepared at {$debugLogPath}."
+                    : 'Failed to write updated WP_DEBUG settings to wp-config.php.'),
             'data' => $written ? [
                 'WP_DEBUG' => $newDebug,
                 'WP_DEBUG_DISPLAY' => 'false',
                 'WP_DEBUG_LOG' => $debugLogPath,
+                'debug_log_bootstrap' => $bootstrapResult ? 'ready' : 'failed',
             ] : null,
         ];
-        return $written;
+        return $success;
     }
 
     private function upsertConfigConstant(string &$content, string $constant, string $valueExpression): bool
     {
-        $pattern = "/define\(\s*['\"]" . preg_quote($constant, '/') . "['\"]\s*,\s*([^)]+)\)\s*;/i";
+        $pattern = '/^[ \t]*define\(\s*[\'"]' . preg_quote($constant, '/') . '[\'"]\s*,[^\r\n;]+?\)\s*;\s*$/mi';
         $replacement = "define('{$constant}', {$valueExpression});";
+        $placeholder = "__WPD_{$constant}_PLACEHOLDER__";
 
-        $replacements = 0;
-        $content = preg_replace($pattern, $replacement, $content, 1, $replacements);
-        if ($replacements > 0) {
+        $updated = preg_replace($pattern, $placeholder, $content, 1, $replacements);
+        if ($updated !== null && $replacements > 0) {
+            $content = $updated;
+            $content = preg_replace($pattern, '', $content);
+            $content = preg_replace('/^[ \t]*' . preg_quote($placeholder, '/') . '[ \t]*$/m', $replacement, $content, 1);
+            $content = preg_replace("/\n{3,}/", "\n\n", $content);
             return true;
         }
 
@@ -210,32 +212,12 @@ class CoreOperationsAgent implements DiagnosticInterface
             return false;
         }
 
-        $content = file_get_contents($configPath);
-        $current = 'false';
-        $newVal = 'true';
-        $replacements = 0;
-        
-        if (preg_match("/define\(\s*['\"]{$constant}['\"]\s*,\s*(true|false)\s*\)/i", $content, $matches)) {
-            $current = strtolower($matches[1]);
-            $newVal = ($current === 'true') ? 'false' : 'true';
-            $content = preg_replace(
-                "/define\(\s*['\"]{$constant}['\"]\s*,\s*(true|false)\s*\)/i",
-                "define('{$constant}', {$newVal})",
-                $content,
-                1,
-                $replacements
-            );
-        } else {
-            $insert = "define('{$constant}', true);\n";
-            if (strpos($content, "/* That's all, stop editing!") !== false) {
-                $content = str_replace("/* That's all, stop editing!", $insert . "/* That's all, stop editing!", $content);
-                $replacements = 1;
-            } else {
-                $content = preg_replace('/(<\?php)/i', "$1\n$insert", $content, 1, $replacements);
-            }
-        }
+        $content = (string) file_get_contents($configPath);
+        $current = strtolower($this->normalizeConfigValueForDisplay($this->extractConfigConstantValue($content, $constant) ?? 'false'));
+        $newVal = ($current === 'true') ? 'false' : 'true';
+        $updated = $this->upsertConfigConstant($content, $constant, $newVal);
 
-        if ($replacements < 1) {
+        if (!$updated) {
             $this->lastActionResult = [
                 'success' => false,
                 'message' => "Failed to update {$constant} in wp-config.php.",
@@ -670,7 +652,14 @@ class CoreOperationsAgent implements DiagnosticInterface
 
     private function resolveDebugLogPath(): string
     {
-        $configVars = $this->parseWpConfig();
+        return $this->resolveDebugLogPathFromConfig($this->parseWpConfig());
+    }
+
+    /**
+     * @param array<string, string> $configVars
+     */
+    private function resolveDebugLogPathFromConfig(array $configVars): string
+    {
         $configured = $configVars['WP_DEBUG_LOG'] ?? null;
         if (is_string($configured) && $configured !== '' && $configured !== 'true' && $configured !== 'false') {
             return $configured;
@@ -706,14 +695,15 @@ class CoreOperationsAgent implements DiagnosticInterface
 
     private function outputErrorLog(): void
     {
-        $logFile = $this->resolveDebugLogPath();
+        $logFile = $this->findExistingDebugLogFile();
         if (!is_file($logFile)) {
+            $diagnostics = $this->getDebugLogDiagnostics($this->resolveDebugLogPath());
             while (ob_get_level()) ob_end_clean();
             header('Content-Type: application/json; charset=utf-8');
             echo json_encode([
                 'success' => false,
-                'message' => 'Debug log not found at ' . $logFile,
-                'data' => ['path' => $logFile],
+                'message' => 'Debug log not found at the configured path. See diagnostics for writable directories and fallback locations.',
+                'data' => $diagnostics,
             ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
             exit;
         }
@@ -732,5 +722,85 @@ class CoreOperationsAgent implements DiagnosticInterface
             ],
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         exit;
+    }
+
+    private function extractConfigConstantValue(string $content, string $constant): ?string
+    {
+        if (preg_match('/define\(\s*[\'"]' . preg_quote($constant, '/') . '[\'"]\s*,\s*([^\r\n;]+)\s*\)\s*;/i', $content, $matches)) {
+            return trim($matches[1]);
+        }
+
+        return null;
+    }
+
+    private function normalizeConfigValueForDisplay(string $rawValue): string
+    {
+        $trimmed = trim($rawValue);
+        $trimmed = rtrim($trimmed, ',');
+
+        if (preg_match('/^(true|false)$/i', $trimmed) === 1) {
+            return strtolower($trimmed);
+        }
+
+        if (preg_match('/^[\'"](.*)[\'"]$/', $trimmed, $matches) === 1) {
+            return (string) $matches[1];
+        }
+
+        return $trimmed;
+    }
+
+    private function bootstrapDebugLogFile(string $debugLogPath): bool
+    {
+        $directory = dirname($debugLogPath);
+        if (!is_dir($directory) && !@mkdir($directory, 0755, true) && !is_dir($directory)) {
+            return false;
+        }
+
+        $marker = '[' . gmdate('c') . '] WP Diagnose debug log bootstrap marker' . PHP_EOL;
+        $written = @file_put_contents($debugLogPath, $marker, FILE_APPEND | LOCK_EX);
+        if ($written === false) {
+            @error_log(trim($marker), 3, $debugLogPath);
+        }
+
+        clearstatcache(true, $debugLogPath);
+        return is_file($debugLogPath);
+    }
+
+    private function findExistingDebugLogFile(): string
+    {
+        $preferred = $this->resolveDebugLogPath();
+        if (is_file($preferred)) {
+            return $preferred;
+        }
+
+        $fallback = rtrim(ABSPATH, '/\\') . '/wp-content/debug.log';
+        if (is_file($fallback)) {
+            return $fallback;
+        }
+
+        return $preferred;
+    }
+
+    /**
+     * @return array{active_path: string, fallback_path: string, status: string, viewer_status: string, active_exists: bool, fallback_exists: bool, directory: string, directory_writable: bool}
+     */
+    private function getDebugLogDiagnostics(string $activePath): array
+    {
+        $directory = dirname($activePath);
+        $fallbackPath = rtrim(ABSPATH, '/\\') . '/wp-content/debug.log';
+        $activeExists = is_file($activePath);
+        $fallbackExists = is_file($fallbackPath);
+        $directoryWritable = is_dir($directory) ? is_writable($directory) : is_writable(dirname($directory));
+
+        return [
+            'active_path' => $activePath,
+            'fallback_path' => $fallbackPath,
+            'status' => $activeExists ? 'ready' : ($directoryWritable ? 'awaiting_log_events' : 'directory_not_writable'),
+            'viewer_status' => ($activeExists || $fallbackExists) ? 'ready' : 'waiting',
+            'active_exists' => $activeExists,
+            'fallback_exists' => $fallbackExists,
+            'directory' => $directory,
+            'directory_writable' => $directoryWritable,
+        ];
     }
 }

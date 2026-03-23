@@ -9,6 +9,7 @@ final class ThreatIntelAgent implements DiagnosticInterface
 {
     private const OPTION_API_KEY = 'wpd_wordfence_api_key';
     private const DOCS_URL = 'https://www.wordfence.com/help/wordfence-intelligence/v3-accessing-and-consuming-the-vulnerability-data-feed/';
+    private const RATE_LIMIT_COOLDOWN_SECONDS = 900;
 
     private array $results = [];
     private bool $isWpLoaded;
@@ -47,11 +48,14 @@ final class ThreatIntelAgent implements DiagnosticInterface
         ];
 
         $cacheMeta = $this->getFeedCacheMeta();
+        $stateMeta = $this->getFeedStateMeta();
 
         $this->results['intel_configuration'] = [
-            'status' => $this->hasConfiguredApiKey() ? 'OK' : 'WARN',
+            'status' => !$this->hasConfiguredApiKey() ? 'WARN' : ($stateMeta['cooldown_active'] ? 'WARN' : 'OK'),
             'info' => $this->hasConfiguredApiKey()
-                ? 'Wordfence API key is configured. Use Sync Feed to refresh the cached vulnerability intelligence dataset.'
+                ? ($stateMeta['cooldown_active']
+                    ? 'Wordfence API key is configured, but Sync Feed is cooling down after an upstream rate limit.'
+                    : 'Wordfence API key is configured. Use Sync Feed to refresh the cached vulnerability intelligence dataset.')
                 : 'Wordfence API key is not configured yet. Add a free API key to enable live CVE matching.',
             'data' => [
                 'provider' => 'Wordfence Intelligence V3',
@@ -61,6 +65,11 @@ final class ThreatIntelAgent implements DiagnosticInterface
                 'docs_url' => self::DOCS_URL,
                 'cache_status' => $cacheMeta['status'],
                 'cache_updated_at' => $cacheMeta['updated_at'],
+                'cache_feed_type' => $cacheMeta['feed_type'],
+                'cooldown_active' => $stateMeta['cooldown_active'],
+                'cooldown_until' => $stateMeta['cooldown_until'],
+                'last_error' => $stateMeta['last_error'],
+                'last_success_at' => $stateMeta['last_success_at'],
             ],
         ];
 
@@ -187,6 +196,19 @@ final class ThreatIntelAgent implements DiagnosticInterface
             return false;
         }
 
+        $state = $this->loadFeedState();
+        if (($state['cooldown_until'] ?? 0) > time()) {
+            $nextRetry = gmdate('c', (int) $state['cooldown_until']);
+            $this->lastActionResult = [
+                'success' => false,
+                'message' => "Sync Feed is temporarily cooling down after a rate limit. Please retry after {$nextRetry}.",
+                'data' => [
+                    'cooldown_until' => $nextRetry,
+                ],
+            ];
+            return false;
+        }
+
         $headers = [
             'Authorization: Bearer ' . $apiKey,
             'Accept: application/json',
@@ -217,13 +239,25 @@ final class ThreatIntelAgent implements DiagnosticInterface
         }
 
         if (!is_array($selectedPayload)) {
+            $failureMessage = $this->buildFeedFailureMessage($lastFailure);
+            $stateUpdate = [
+                'last_error' => $failureMessage,
+            ];
+            if (($lastFailure['status'] ?? 0) === 429) {
+                $stateUpdate['cooldown_until'] = time() + self::RATE_LIMIT_COOLDOWN_SECONDS;
+            } else {
+                $stateUpdate['cooldown_until'] = 0;
+            }
+            $this->saveFeedState($stateUpdate);
+
             $this->lastActionResult = [
                 'success' => false,
-                'message' => $this->buildFeedFailureMessage($lastFailure),
+                'message' => $failureMessage,
                 'data' => $lastFailure ? [
                     'http_status' => $lastFailure['status'],
                     'content_type' => $lastFailure['content_type'],
                     'response_preview' => $lastFailure['preview'],
+                    'cooldown_until' => isset($stateUpdate['cooldown_until']) && (int) $stateUpdate['cooldown_until'] > 0 ? gmdate('c', (int) $stateUpdate['cooldown_until']) : null,
                 ] : null,
             ];
             return false;
@@ -243,6 +277,13 @@ final class ThreatIntelAgent implements DiagnosticInterface
         ], JSON_UNESCAPED_SLASHES));
 
         $success = $written !== false;
+        $this->saveFeedState($success ? [
+            'cooldown_until' => 0,
+            'last_error' => '',
+            'last_success_at' => time(),
+        ] : [
+            'last_error' => 'Threat intelligence feed was downloaded but could not be cached locally.',
+        ]);
         $this->lastActionResult = [
             'success' => $success,
             'message' => $success
@@ -266,6 +307,12 @@ final class ThreatIntelAgent implements DiagnosticInterface
         }
 
         $saved = $this->setOption(self::OPTION_API_KEY, $apiKey);
+        if ($saved) {
+            $this->saveFeedState([
+                'cooldown_until' => 0,
+                'last_error' => '',
+            ]);
+        }
         $this->lastActionResult = [
             'success' => $saved,
             'message' => $saved ? 'Wordfence API key saved successfully.' : 'Failed to save Wordfence API key.',
@@ -277,6 +324,12 @@ final class ThreatIntelAgent implements DiagnosticInterface
     private function clearWordfenceApiKey(): bool
     {
         $cleared = $this->setOption(self::OPTION_API_KEY, '');
+        if ($cleared) {
+            $this->saveFeedState([
+                'cooldown_until' => 0,
+                'last_error' => '',
+            ]);
+        }
         $this->lastActionResult = [
             'success' => $cleared,
             'message' => $cleared ? 'Wordfence API key cleared.' : 'Failed to clear Wordfence API key.',
@@ -306,8 +359,13 @@ final class ThreatIntelAgent implements DiagnosticInterface
         return rtrim(ABSPATH, '/\\') . '/wp-content/.wpd-threat-intel-cache.json';
     }
 
+    private function getStateFilePath(): string
+    {
+        return rtrim(ABSPATH, '/\\') . '/wp-content/.wpd-threat-intel-state.json';
+    }
+
     /**
-     * @return array{status: string, updated_at: string}
+     * @return array{status: string, updated_at: string, feed_type: string}
      */
     private function getFeedCacheMeta(): array
     {
@@ -316,6 +374,7 @@ final class ThreatIntelAgent implements DiagnosticInterface
             return [
                 'status' => 'missing',
                 'updated_at' => 'never',
+                'feed_type' => 'none',
             ];
         }
 
@@ -323,6 +382,24 @@ final class ThreatIntelAgent implements DiagnosticInterface
         return [
             'status' => 'ready',
             'updated_at' => is_array($cached) && isset($cached['updated_at']) ? (string) $cached['updated_at'] : gmdate('c', (int) filemtime($cacheFile)),
+            'feed_type' => is_array($cached) && isset($cached['feed_type']) ? (string) $cached['feed_type'] : 'unknown',
+        ];
+    }
+
+    /**
+     * @return array{cooldown_active: bool, cooldown_until: string, last_error: string, last_success_at: string}
+     */
+    private function getFeedStateMeta(): array
+    {
+        $state = $this->loadFeedState();
+        $cooldownUntil = (int) ($state['cooldown_until'] ?? 0);
+        $lastSuccessAt = (int) ($state['last_success_at'] ?? 0);
+
+        return [
+            'cooldown_active' => $cooldownUntil > time(),
+            'cooldown_until' => $cooldownUntil > 0 ? gmdate('c', $cooldownUntil) : 'ready',
+            'last_error' => (string) ($state['last_error'] ?? ''),
+            'last_success_at' => $lastSuccessAt > 0 ? gmdate('c', $lastSuccessAt) : 'never',
         ];
     }
 
@@ -439,6 +516,35 @@ final class ThreatIntelAgent implements DiagnosticInterface
         }
 
         return false;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function loadFeedState(): array
+    {
+        $stateFile = $this->getStateFilePath();
+        if (!is_file($stateFile)) {
+            return [];
+        }
+
+        $decoded = json_decode((string) file_get_contents($stateFile), true);
+        return is_array($decoded) ? $decoded : [];
+    }
+
+    /**
+     * @param array<string, mixed> $updates
+     */
+    private function saveFeedState(array $updates): void
+    {
+        $stateFile = $this->getStateFilePath();
+        $directory = dirname($stateFile);
+        if (!is_dir($directory)) {
+            @mkdir($directory, 0755, true);
+        }
+
+        $state = array_merge($this->loadFeedState(), $updates);
+        @file_put_contents($stateFile, json_encode($state, JSON_UNESCAPED_SLASHES));
     }
 
     /**

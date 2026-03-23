@@ -441,12 +441,58 @@ if ($file_age > $expiration_time) {
                 </div>
             </div>
 
-            <!-- Tab Navigation -->
-            <div x-show="!loading" class="flex flex-wrap border-b border-slate-700/50 gap-2 mb-6">
-                <button @click="activeTab = 'all'" :class="activeTab === 'all' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-slate-500 hover:text-slate-300'" class="px-6 py-3 border-b-2 font-bold text-xs uppercase tracking-widest transition">All Agents</button>
-                <template x-for="(report, agent) in reports" :key="agent">
-                    <button @click="activeTab = agent" :class="activeTab === agent ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-slate-500 hover:text-slate-300'" class="px-6 py-3 border-b-2 font-bold text-xs uppercase tracking-widest transition" x-text="agent"></button>
-                </template>
+            <!-- Agent Navigation -->
+            <div x-show="!loading" class="mb-6 rounded-2xl border border-slate-700/60 bg-slate-900/60 p-4 shadow-lg">
+                <div class="grid gap-4 lg:grid-cols-[auto_minmax(0,1fr)_280px] lg:items-end">
+                    <div class="space-y-2">
+                        <div class="text-[10px] font-bold uppercase tracking-[0.3em] text-slate-500">Agent Navigation</div>
+                        <div class="inline-flex rounded-xl border border-slate-700 bg-slate-950/80 p-1">
+                            <button
+                                type="button"
+                                @click="setViewMode('all')"
+                                class="rounded-lg px-4 py-2 text-[11px] font-bold uppercase tracking-[0.2em] transition"
+                                :class="viewMode === 'all' ? 'bg-emerald-500/15 text-emerald-300' : 'text-slate-400 hover:text-slate-200'"
+                            >All Agents</button>
+                            <button
+                                type="button"
+                                @click="setViewMode('single')"
+                                class="rounded-lg px-4 py-2 text-[11px] font-bold uppercase tracking-[0.2em] transition"
+                                :class="viewMode === 'single' ? 'bg-emerald-500/15 text-emerald-300' : 'text-slate-400 hover:text-slate-200'"
+                            >Single Agent</button>
+                        </div>
+                    </div>
+
+                    <div class="space-y-2">
+                        <label class="text-[10px] font-bold uppercase tracking-[0.3em] text-slate-500">Search Agents</label>
+                        <input
+                            type="text"
+                            x-model="agentSearch"
+                            @input="syncAgentSearch()"
+                            placeholder="Filter by label or class name"
+                            class="w-full rounded-xl border border-slate-700 bg-slate-950/80 px-4 py-3 text-sm text-slate-100 outline-none transition focus:border-emerald-500"
+                        >
+                    </div>
+
+                    <div class="space-y-2" x-show="viewMode === 'single'">
+                        <label class="text-[10px] font-bold uppercase tracking-[0.3em] text-slate-500">Select Agent</label>
+                        <select
+                            x-model="activeTab"
+                            class="w-full rounded-xl border border-slate-700 bg-slate-950/80 px-4 py-3 text-sm text-slate-100 outline-none transition focus:border-emerald-500"
+                        >
+                            <template x-for="agent in visibleAgents()" :key="agent">
+                                <option :value="agent" x-text="displayAgentLabel(agent)"></option>
+                            </template>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="mt-4 flex flex-wrap items-center gap-3 text-[11px] text-slate-500">
+                    <span x-text="`${visibleAgents().length} visible agent panel(s)`"></span>
+                    <span class="rounded-full border border-slate-700 px-3 py-1 text-slate-300" x-text="viewMode === 'all' ? 'All Agents Mode' : 'Single Agent Mode'"></span>
+                    <template x-if="viewMode === 'single' && activeTab !== 'all'">
+                        <span class="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-emerald-300" x-text="displayAgentLabel(activeTab)"></span>
+                    </template>
+                </div>
             </div>
 
             <!-- Loading Spinner -->
@@ -458,12 +504,15 @@ if ($file_age > $expiration_time) {
             <!-- Agent Grid -->
             <div x-show="!loading" class="grid grid-cols-1 gap-8">
                 <template x-for="(report, agent) in reports" :key="agent">
-                    <div x-show="activeTab === 'all' || activeTab === agent" class="bg-slate-800 border border-slate-700/50 rounded-xl shadow-2xl overflow-hidden flex flex-col hover:border-slate-600 transition">
+                    <div x-show="isAgentVisible(agent)" class="bg-slate-800 border border-slate-700/50 rounded-xl shadow-2xl overflow-hidden flex flex-col hover:border-slate-600 transition">
                         <div class="px-6 py-4 bg-slate-800/80 border-t border-slate-700/60 flex justify-between items-center text-xs text-slate-400">
                             <span class="font-mono">WP Diagnose PRO <?php echo \WPDiagnose\Core\Version::label(); ?></span>
                             <div class="flex items-center gap-3">
                                 <div class="w-2 h-2 rounded-full bg-emerald-500"></div>
-                                <h2 class="text-lg font-bold text-slate-100 uppercase tracking-tight" x-text="agent"></h2>
+                                <div class="text-right">
+                                    <h2 class="text-lg font-bold text-slate-100 tracking-tight" x-text="displayAgentLabel(agent)"></h2>
+                                    <div class="text-[10px] font-mono text-slate-500" x-text="agent"></div>
+                                </div>
                             </div>
                         </div>
                         
@@ -524,9 +573,9 @@ if ($file_age > $expiration_time) {
                                                 <button
                                                     type="button"
                                                     @click.prevent.stop="syncThreatIntelFeed()"
-                                                    :disabled="finding.data.api_key_status !== 'configured'"
+                                                    :disabled="finding.data.api_key_status !== 'configured' || finding.data.cooldown_active"
                                                     class="rounded border px-4 py-2 text-[10px] font-bold uppercase tracking-[0.2em] transition"
-                                                    :class="finding.data.api_key_status === 'configured'
+                                                    :class="finding.data.api_key_status === 'configured' && !finding.data.cooldown_active
                                                         ? 'border-sky-500/40 bg-sky-500/10 text-sky-300 hover:bg-sky-500/20'
                                                         : 'border-slate-700 bg-slate-800 text-slate-500 cursor-not-allowed'"
                                                 >Sync Feed</button>
@@ -534,15 +583,31 @@ if ($file_age > $expiration_time) {
                                                     Feed cache: <span class="text-slate-200" x-text="finding.data.cache_status"></span>
                                                 </div>
                                                 <div class="text-[11px] text-slate-500">
+                                                    Feed source: <span class="text-slate-200" x-text="finding.data.cache_feed_type"></span>
+                                                </div>
+                                                <div class="text-[11px] text-slate-500">
                                                     Last sync: <span class="text-slate-200" x-text="finding.data.cache_updated_at"></span>
                                                 </div>
                                             </div>
+
+                                            <template x-if="finding.data.cooldown_active">
+                                                <div class="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-200">
+                                                    Sync Feed is cooling down after an upstream rate limit. Next retry window: <span class="font-mono" x-text="finding.data.cooldown_until"></span>
+                                                </div>
+                                            </template>
+
+                                            <template x-if="finding.data.last_error">
+                                                <div class="rounded-lg border border-slate-700 bg-slate-950/80 px-3 py-2 text-[11px] text-slate-400">
+                                                    Last feed error: <span class="text-slate-200" x-text="finding.data.last_error"></span>
+                                                </div>
+                                            </template>
 
                                             <div class="grid gap-2 text-[11px] text-slate-400 md:grid-cols-2">
                                                 <div>Provider: <span class="text-slate-200" x-text="finding.data.provider"></span></div>
                                                 <div>Key status: <span class="text-slate-200" x-text="finding.data.api_key_status"></span></div>
                                                 <div>Key source: <span class="text-slate-200" x-text="finding.data.api_key_source"></span></div>
                                                 <div>Saved key: <span class="text-slate-200" x-text="finding.data.api_key_hint"></span></div>
+                                                <div>Last successful sync: <span class="text-slate-200" x-text="finding.data.last_success_at"></span></div>
                                             </div>
                                         </div>
                                     </template>
@@ -676,7 +741,20 @@ if ($file_age > $expiration_time) {
 
         <!-- Footer -->
         <footer class="max-w-6xl mx-auto mt-20 pt-10 border-t border-slate-700/50 text-center mb-10">
-            <p class="text-slate-600 text-[10px] font-mono uppercase tracking-[0.2em]">WP Diagnose Agentic Swarm <?php echo \WPDiagnose\Core\Version::label(); ?> &copy; 2026</p>
+            <p class="text-slate-600 text-[10px] font-mono uppercase tracking-[0.2em]">WP Diagnose Agentic Swarm <?php echo \WPDiagnose\Core\Version::label(); ?> &copy; 2026. Built by BigDesigner for GNNcyber.</p>
+            <div class="mt-4 flex justify-center">
+                <a
+                    href="https://github.com/BigDesigner/wordpress-diagnose-tool"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="inline-flex items-center gap-3 rounded-full border border-slate-700 bg-slate-900/80 px-4 py-2 text-slate-300 transition hover:border-emerald-500/40 hover:text-white"
+                >
+                    <svg class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                        <path d="M12 .5C5.65.5.5 5.66.5 12.02c0 5.1 3.3 9.43 7.88 10.96.58.1.79-.25.79-.56 0-.27-.01-1.02-.02-2-3.2.7-3.88-1.54-3.88-1.54-.52-1.33-1.28-1.69-1.28-1.69-1.05-.72.08-.71.08-.71 1.16.08 1.77 1.2 1.77 1.2 1.03 1.78 2.7 1.26 3.36.97.1-.75.4-1.26.73-1.54-2.55-.29-5.24-1.28-5.24-5.68 0-1.25.45-2.27 1.18-3.07-.12-.29-.51-1.46.11-3.05 0 0 .97-.31 3.17 1.17a11.08 11.08 0 0 1 5.78 0c2.2-1.48 3.16-1.17 3.16-1.17.63 1.59.24 2.76.12 3.05.73.8 1.17 1.82 1.17 3.07 0 4.41-2.69 5.38-5.26 5.67.42.36.79 1.07.79 2.16 0 1.57-.01 2.83-.01 3.22 0 .31.2.67.8.56A11.53 11.53 0 0 0 23.5 12C23.5 5.66 18.34.5 12 .5Z"/>
+                    </svg>
+                    <span class="text-[11px] font-bold uppercase tracking-[0.2em]">GitHub Repository</span>
+                </a>
+            </div>
         </footer>
     </div>
 
@@ -686,6 +764,8 @@ if ($file_age > $expiration_time) {
                 loading: true,
                 reports: {},
                 activeTab: 'all',
+                viewMode: 'all',
+                agentSearch: '',
                 token: new URLSearchParams(window.location.search).get('token') || '',
                 threatIntelApiKeyDraft: '',
                 notifications: [],
@@ -700,6 +780,67 @@ if ($file_age > $expiration_time) {
                 },
                 init() {
                     this.fetchReport();
+                },
+                displayAgentLabel(agent) {
+                    const labels = {
+                        ServerInspector: 'Server Inspector',
+                        WPInspector: 'WordPress Inspector',
+                        SecurityInspector: 'Security Inspector',
+                        BootstrapInspector: 'Bootstrap Inspector',
+                        DBHealth: 'Database Health',
+                        CoreIntegrityAgent: 'Core Integrity',
+                        AssetManagerAgent: 'Asset Manager',
+                        CoreOperationsAgent: 'Core Operations',
+                        ThreatIntelAgent: 'Threat Intel',
+                        MalwareInspector: 'Malware Inspector'
+                    };
+                    if (labels[agent]) {
+                        return labels[agent];
+                    }
+
+                    return agent
+                        .replace(/Agent$/, '')
+                        .replace(/([a-z])([A-Z])/g, '$1 $2')
+                        .replace(/^WP\b/, 'WordPress')
+                        .replace(/\bDB\b/g, 'Database');
+                },
+                orderedAgents() {
+                    return Object.keys(this.reports).sort((left, right) => this.displayAgentLabel(left).localeCompare(this.displayAgentLabel(right)));
+                },
+                matchesAgentFilter(agent) {
+                    const query = this.agentSearch.trim().toLowerCase();
+                    if (!query) {
+                        return true;
+                    }
+
+                    return agent.toLowerCase().includes(query) || this.displayAgentLabel(agent).toLowerCase().includes(query);
+                },
+                visibleAgents() {
+                    return this.orderedAgents().filter((agent) => this.matchesAgentFilter(agent));
+                },
+                ensureAgentSelection() {
+                    const visible = this.visibleAgents();
+                    if (this.viewMode === 'single') {
+                        if (this.activeTab === 'all' || !visible.includes(this.activeTab)) {
+                            this.activeTab = visible[0] || 'all';
+                        }
+                    } else {
+                        this.activeTab = 'all';
+                    }
+                },
+                setViewMode(mode) {
+                    this.viewMode = mode;
+                    this.ensureAgentSelection();
+                },
+                syncAgentSearch() {
+                    this.ensureAgentSelection();
+                },
+                isAgentVisible(agent) {
+                    if (!this.matchesAgentFilter(agent)) {
+                        return false;
+                    }
+
+                    return this.viewMode === 'all' ? true : this.activeTab === agent;
                 },
                 hydrateThreatIntelState() {
                     const config = this.reports?.ThreatIntelAgent?.intel_configuration?.data;
@@ -759,6 +900,7 @@ if ($file_age > $expiration_time) {
                             try {
                                 this.reports = await response.json();
                                 this.hydrateThreatIntelState();
+                                this.ensureAgentSelection();
                                 if (this.reports.status === 'error' || (this.reports.success === false && this.reports.message)) {
                                     this.notify('API connection error: ' + this.reports.message, 'error');
                                     this.reports = {};

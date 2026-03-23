@@ -104,6 +104,27 @@ final class AgentSmokeTest extends TestCase
         self::assertStringContainsString("define('WP_DEBUG', true);", $config);
         self::assertStringContainsString("define('WP_DEBUG_DISPLAY', false);", $config);
         self::assertStringContainsString("define('WP_DEBUG_LOG', '" . WPD_TEST_ROOT . "wp-content/wp-diagnose-tool.log');", $config);
+        self::assertFileExists(WPD_TEST_ROOT . 'wp-content/wp-diagnose-tool.log');
+    }
+
+    public function testCoreOperationsAgentDeduplicatesDebugLogDefinitions(): void
+    {
+        wpd_tests_write(
+            'wp-config.php',
+            "<?php\n" .
+            "define('WP_DEBUG_LOG', true);\n" .
+            "define('WP_DEBUG_LOG', dirname(__FILE__) . '/debug.log');\n" .
+            "/* That's all, stop editing! Happy publishing. */\n"
+        );
+
+        $agent = new CoreOperationsAgent(false);
+        $result = $agent->fix('toggle_wp_debug');
+
+        self::assertTrue($result);
+
+        $config = wpd_tests_read('wp-config.php');
+        self::assertSame(1, preg_match_all("/define\\('WP_DEBUG_LOG',/", $config));
+        self::assertStringContainsString("define('WP_DEBUG_LOG', '" . WPD_TEST_ROOT . "wp-content/wp-diagnose-tool.log');", $config);
     }
 
     public function testThreatIntelAgentWarnsWhenWordfenceApiKeyIsMissing(): void
@@ -157,6 +178,7 @@ final class AgentSmokeTest extends TestCase
         wpd_tests_write('wp-includes/version.php', "<?php\n\$wp_version = '6.8.1';\n");
         wpd_tests_write('wp-content/.wpd-threat-intel-cache.json', json_encode([
             'updated_at' => '2026-03-23T10:00:00Z',
+            'feed_type' => 'scanner',
             'records' => [
                 'wf-1' => [
                     'title' => 'Sample plugin vulnerability',
@@ -190,6 +212,35 @@ final class AgentSmokeTest extends TestCase
         self::assertSame('OK', $report['feed_status']['status']);
         self::assertSame('ERROR', $report['vulnerability_overview']['status']);
         self::assertArrayHasKey('known_vulnerabilities', $report);
+        self::assertSame('scanner', $report['intel_configuration']['data']['cache_feed_type']);
+    }
+
+    public function testThreatIntelAgentReportsCooldownStateFromSidecarStateFile(): void
+    {
+        $cooldownUntil = time() + 600;
+        wpd_tests_write('wp-content/.wpd-threat-intel-state.json', json_encode([
+            'cooldown_until' => $cooldownUntil,
+            'last_error' => 'Wordfence rate-limited the feed request.',
+            'last_success_at' => time() - 120,
+        ], JSON_UNESCAPED_SLASHES));
+
+        $fakeDb = new class {
+            public function get_option(string $name)
+            {
+                return $name === 'wpd_wordfence_api_key' ? 'wf_test_key_123456' : null;
+            }
+        };
+
+        $GLOBALS['DB'] = $fakeDb;
+
+        try {
+            $report = (new ThreatIntelAgent(false))->check();
+        } finally {
+            unset($GLOBALS['DB']);
+        }
+
+        self::assertTrue($report['intel_configuration']['data']['cooldown_active']);
+        self::assertSame('Wordfence rate-limited the feed request.', $report['intel_configuration']['data']['last_error']);
     }
 
     public function testMalwareInspectorFlagsUploadsPhpAndUnexpectedRootPhp(): void
@@ -202,5 +253,17 @@ final class AgentSmokeTest extends TestCase
         self::assertSame('ERROR', $report['malware_summary']['status']);
         self::assertContains('wp-content/uploads/2026/03/u5.php', $report['php_in_uploads']['data']);
         self::assertContains('wp7.php', $report['unexpected_root_php']['data']);
+    }
+
+    public function testMalwareInspectorDowngradesTrustedCoreFunctionHitsToReview(): void
+    {
+        wpd_tests_write('wp-admin/includes/file.php', "<?php\nsystem('zip');\n");
+
+        $report = (new MalwareInspector())->check();
+
+        self::assertSame('WARN', $report['malware_summary']['status']);
+        self::assertSame('OK', $report['shell_signatures']['status']);
+        self::assertSame('WARN', $report['core_signature_review']['status']);
+        self::assertContains('wp-admin/includes/file.php | system', $report['core_signature_review']['data']);
     }
 }
