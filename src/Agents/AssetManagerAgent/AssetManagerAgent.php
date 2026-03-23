@@ -14,6 +14,7 @@ class AssetManagerAgent implements DiagnosticInterface
 {
     private array $results = [];
     private bool $isWpLoaded;
+    private array $lastActionResult = ['success' => true, 'message' => '', 'data' => null];
 
     public function __construct(bool $isWpLoaded = false)
     {
@@ -57,6 +58,8 @@ class AssetManagerAgent implements DiagnosticInterface
 
     public function fix(string $id): bool
     {
+        $this->lastActionResult = ['success' => false, 'message' => 'Unknown asset action.', 'data' => null];
+
         // $id could be "toggle_plugin:akismet/akismet.php"
         // or "toggle_theme:twentytwentyfour" etc.
         if (strpos($id, 'toggle_plugin:') === 0) {
@@ -77,12 +80,14 @@ class AssetManagerAgent implements DiagnosticInterface
         return $this->results ?: $this->check();
     }
 
+    public function getLastActionResult(): array
+    {
+        return $this->lastActionResult;
+    }
+
     private function getPluginsStatus(): array
     {
-        $activePlugins = $this->getOption('active_plugins', []);
-        if (!is_array($activePlugins)) {
-            $activePlugins = [];
-        }
+        $activePlugins = $this->normalizePluginList($this->getOption('active_plugins', []));
 
         $plugins = [];
         // Scan wp-content/plugins directly to support independent mode
@@ -100,7 +105,7 @@ class AssetManagerAgent implements DiagnosticInterface
                         $content = file_get_contents($subfile->getPathname(), false, null, 0, 8192);
                         if (preg_match('/^[ \t\/*#@]*Plugin Name:(.*)$/mi', $content, $match)) {
                             $pluginName = trim($match[1]);
-                            $relPath = $fileinfo->getFilename() . '/' . $subfile->getFilename();
+                            $relPath = $this->normalizePluginPath($fileinfo->getFilename() . '/' . $subfile->getFilename());
                             $plugins[$relPath] = [
                                 'name'   => $pluginName,
                                 'active' => in_array($relPath, $activePlugins, true),
@@ -112,7 +117,7 @@ class AssetManagerAgent implements DiagnosticInterface
                 $content = file_get_contents($fileinfo->getPathname(), false, null, 0, 8192);
                 if (preg_match('/^[ \t\/*#@]*Plugin Name:(.*)$/mi', $content, $match)) {
                     $pluginName = trim($match[1]);
-                    $relPath = $fileinfo->getFilename();
+                    $relPath = $this->normalizePluginPath($fileinfo->getFilename());
                     $plugins[$relPath] = [
                         'name'   => $pluginName,
                         'active' => in_array($relPath, $activePlugins, true),
@@ -125,7 +130,8 @@ class AssetManagerAgent implements DiagnosticInterface
 
     private function getThemesStatus(): array
     {
-        $currentTheme = (string) $this->getOption('stylesheet', '');
+        $currentStylesheet = $this->normalizeThemeSlug((string) $this->getOption('stylesheet', ''));
+        $currentTemplate = $this->normalizeThemeSlug((string) $this->getOption('template', ''));
 
         $themes = [];
         $themeDir = ABSPATH . 'wp-content/themes/';
@@ -142,7 +148,7 @@ class AssetManagerAgent implements DiagnosticInterface
                 $themeName = preg_match('/^[ \t\/*#]*Theme Name:(.*)$/mi', $content, $match) ? trim($match[1]) : $slug;
                 $themes[$slug] = [
                     'name'   => $themeName,
-                    'active' => ($currentTheme === $slug),
+                    'active' => ($currentStylesheet === $slug || ($currentStylesheet === '' && $currentTemplate === $slug)),
                 ];
             }
         }
@@ -151,46 +157,83 @@ class AssetManagerAgent implements DiagnosticInterface
 
     private function togglePlugin(string $pluginRelPath): bool
     {
-        $activePlugins = $this->getOption('active_plugins', []);
-        if (!is_array($activePlugins)) $activePlugins = [];
+        $pluginRelPath = $this->normalizePluginPath($pluginRelPath);
+        $activePlugins = $this->normalizePluginList($this->getOption('active_plugins', []));
 
         $index = array_search($pluginRelPath, $activePlugins, true);
         if ($index !== false) {
             unset($activePlugins[$index]);
             $activePlugins = array_values($activePlugins);
+            $result = $this->updateOption('active_plugins', $activePlugins);
+            $this->lastActionResult = [
+                'success' => $result,
+                'message' => $result ? "Plugin deactivated: {$pluginRelPath}" : "Failed to deactivate plugin: {$pluginRelPath}",
+                'data' => ['plugin' => $pluginRelPath, 'active' => false],
+            ];
+            return $result;
         } else {
             $activePlugins[] = $pluginRelPath;
+            $activePlugins = array_values(array_unique($activePlugins));
+            $result = $this->updateOption('active_plugins', $activePlugins);
+            $this->lastActionResult = [
+                'success' => $result,
+                'message' => $result ? "Plugin activated: {$pluginRelPath}" : "Failed to activate plugin: {$pluginRelPath}",
+                'data' => ['plugin' => $pluginRelPath, 'active' => true],
+            ];
+            return $result;
         }
-
-        return $this->updateOption('active_plugins', $activePlugins);
     }
 
     private function activateTheme(string $themeSlug): bool
     {
+        $themeSlug = $this->normalizeThemeSlug($themeSlug);
         $themeDir = ABSPATH . 'wp-content/themes/' . $themeSlug;
-        if (!is_dir($themeDir)) return false;
+        if (!is_dir($themeDir)) {
+            $this->lastActionResult = [
+                'success' => false,
+                'message' => "Theme directory not found: {$themeSlug}",
+                'data' => ['theme' => $themeSlug],
+            ];
+            return false;
+        }
 
         $styleCss = $themeDir . '/style.css';
         if (is_file($styleCss)) {
             $content = file_get_contents($styleCss, false, null, 0, 8192);
             $template = preg_match('/^[ \t\/*#]*Template:(.*)$/mi', $content, $match) ? trim($match[1]) : $themeSlug;
-            
-            $this->updateOption('template', $template);
-            $this->updateOption('stylesheet', $themeSlug);
-            $this->updateOption('current_theme', $themeSlug);
-            return true;
+            $themeName = preg_match('/^[ \t\/*#]*Theme Name:(.*)$/mi', $content, $nameMatch) ? trim($nameMatch[1]) : $themeSlug;
+
+            $updated = $this->updateOption('template', $template)
+                && $this->updateOption('stylesheet', $themeSlug)
+                && $this->updateOption('current_theme', $themeName);
+
+            $this->lastActionResult = [
+                'success' => $updated,
+                'message' => $updated ? "Theme activated: {$themeName}" : "Failed to activate theme: {$themeName}",
+                'data' => ['theme' => $themeSlug, 'template' => $template],
+            ];
+            return $updated;
         }
+
+        $this->lastActionResult = [
+            'success' => false,
+            'message' => "Theme stylesheet missing: {$themeSlug}",
+            'data' => ['theme' => $themeSlug],
+        ];
         return false;
     }
 
     private function getOption(string $name, $default = null)
     {
+        if ($this->isWpLoaded && function_exists('get_option')) {
+            return get_option($name, $default);
+        }
+
         global $DB;
         if ($DB) {
             $val = $DB->get_option($name);
             if ($val !== null) {
-                $unserialized = @unserialize($val);
-                return $unserialized !== false ? $unserialized : $val;
+                return $this->maybeUnserialize($val);
             }
         }
         return $default;
@@ -198,12 +241,78 @@ class AssetManagerAgent implements DiagnosticInterface
 
     private function updateOption(string $name, $value): bool
     {
+        if ($this->isWpLoaded && function_exists('update_option')) {
+            return update_option($name, $value);
+        }
+
         global $DB;
         if ($DB) {
-            $serialized = is_array($value) || is_object($value) ? serialize($value) : $value;
-            $DB->update_option($name, $serialized);
-            return true;
+            $serialized = $this->maybeSerialize($value);
+            return $DB->update_option($name, $serialized);
         }
         return false;
+    }
+
+    /**
+     * @param mixed $value
+     * @return array<int, string>
+     */
+    private function normalizePluginList($value): array
+    {
+        if (!is_array($value)) {
+            return [];
+        }
+
+        $normalized = [];
+        foreach ($value as $pluginPath) {
+            if (is_string($pluginPath) && $pluginPath !== '') {
+                $normalized[] = $this->normalizePluginPath($pluginPath);
+            }
+        }
+
+        return array_values(array_unique($normalized));
+    }
+
+    private function normalizePluginPath(string $path): string
+    {
+        return trim(str_replace('\\', '/', $path), '/');
+    }
+
+    private function normalizeThemeSlug(string $slug): string
+    {
+        return trim(str_replace('\\', '/', $slug), '/');
+    }
+
+    /**
+     * @param mixed $value
+     * @return mixed
+     */
+    private function maybeUnserialize($value)
+    {
+        if (!is_string($value) || !$this->isSerialized($value)) {
+            return $value;
+        }
+
+        $result = @unserialize($value);
+        return $result === false && $value !== 'b:0;' ? $value : $result;
+    }
+
+    /**
+     * @param mixed $value
+     * @return mixed
+     */
+    private function maybeSerialize($value)
+    {
+        return is_array($value) || is_object($value) ? serialize($value) : $value;
+    }
+
+    private function isSerialized(string $value): bool
+    {
+        $value = trim($value);
+        if ($value === 'N;') {
+            return true;
+        }
+
+        return preg_match('/^(?:a|O|s|b|i|d):/', $value) === 1;
     }
 }

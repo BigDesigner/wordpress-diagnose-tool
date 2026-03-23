@@ -65,7 +65,11 @@ class SecurityInspector implements DiagnosticInterface
         $exposed = $this->auditExposedFiles();
         $this->results['exposed_files'] = [
             'status' => $exposed['status'],
-            'info' => $exposed['status'] === 'OK' ? 'No common exposed files' : 'Files found: ' . implode(',', $exposed['detected']),
+            'info' => $exposed['status'] === 'OK'
+                ? 'No common exposed files'
+                : ($exposed['status'] === 'ERROR'
+                    ? 'Root path unavailable for exposed file audit.'
+                    : 'Files found: ' . implode(',', $exposed['detected'])),
         ];
 
         return $this->results;
@@ -96,7 +100,10 @@ class SecurityInspector implements DiagnosticInterface
     private function auditPermissions(): array
     {
         if (!$this->absPath || !is_dir($this->absPath)) {
-            return ['status' => 'ERROR', 'info' => 'Target path invalid or unreachable'];
+            return [
+                'wp_config' => ['actual' => 'N/A', 'status' => 'ERROR'],
+                'root_directory' => ['actual' => 'N/A', 'status' => 'ERROR'],
+            ];
         }
 
         $configPath = $this->absPath . 'wp-config.php';
@@ -126,9 +133,14 @@ class SecurityInspector implements DiagnosticInterface
     {
         $salts = ['AUTH_KEY', 'SECURE_AUTH_KEY', 'LOGGED_IN_KEY', 'NONCE_KEY', 'AUTH_SALT', 'SECURE_AUTH_SALT', 'LOGGED_IN_SALT', 'NONCE_SALT'];
         $missing = [];
+        $configContent = $this->readConfigFile();
 
         foreach ($salts as $salt) {
-            if (!defined($salt)) {
+            $hasDefinedConstant = defined($salt);
+            $hasConfigEntry = $configContent !== null
+                && preg_match("/define\s*\(\s*['\"]" . preg_quote($salt, '/') . "['\"]\s*,/i", $configContent) === 1;
+
+            if (!$hasDefinedConstant && !$hasConfigEntry) {
                 $missing[] = $salt;
             }
         }
@@ -146,6 +158,13 @@ class SecurityInspector implements DiagnosticInterface
      */
     private function auditExposedFiles(): array
     {
+        if (!$this->absPath || !is_dir($this->absPath)) {
+            return [
+                'detected' => [],
+                'status' => 'ERROR',
+            ];
+        }
+
         $targets = ['readme.html', 'license.txt', 'wp-config-sample.php'];
         $present = [];
 
@@ -159,5 +178,26 @@ class SecurityInspector implements DiagnosticInterface
             'detected' => $present,
             'status' => empty($present) ? 'OK' : 'WARN',
         ];
+    }
+
+    private function readConfigFile(): ?string
+    {
+        if (!$this->absPath || !is_dir($this->absPath)) {
+            return null;
+        }
+
+        $candidates = [
+            $this->absPath . 'wp-config.php',
+            dirname(rtrim($this->absPath, '/\\')) . '/wp-config.php',
+        ];
+
+        foreach ($candidates as $candidate) {
+            if (is_file($candidate)) {
+                $content = @file_get_contents($candidate);
+                return $content === false ? null : $content;
+            }
+        }
+
+        return null;
     }
 }

@@ -114,7 +114,20 @@ class WPInspector implements DiagnosticInterface
             return ['version' => 'N/A'];
         }
 
+        if (is_file(ABSPATH . 'wp-admin/includes/update.php')) {
+            require_once ABSPATH . 'wp-admin/includes/update.php';
+        }
+
         $currentVersion = get_bloginfo('version');
+        if (!function_exists('get_core_updates')) {
+            return [
+                'current' => $currentVersion,
+                'update_available' => false,
+                'new_version' => null,
+                'status' => 'OK',
+            ];
+        }
+
         $offers = get_core_updates(['dismissed' => false]);
         
         return [
@@ -133,6 +146,10 @@ class WPInspector implements DiagnosticInterface
     private function getPluginsStatus(): array
     {
         if (!$this->isWpLoaded) {
+            return [];
+        }
+
+        if (!is_file(ABSPATH . 'wp-admin/includes/plugin.php')) {
             return [];
         }
 

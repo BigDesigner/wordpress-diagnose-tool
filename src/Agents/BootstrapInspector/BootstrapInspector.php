@@ -35,7 +35,7 @@ class BootstrapInspector implements DiagnosticInterface
      */
     public function check(): array
     {
-        if (defined('ABSPATH')) {
+        if (function_exists('get_bloginfo')) {
             $this->results['core_boot'] = ['status' => 'OK', 'info' => 'WordPress core already loaded via standard ABSPATH.'];
             return $this->results;
         }
@@ -70,7 +70,16 @@ class BootstrapInspector implements DiagnosticInterface
      */
     private function locateConfig(): void
     {
-        $locations = ['./wp-config.php', '../wp-config.php', './../wp-config.php'];
+        $locations = [];
+
+        if (defined('ABSPATH')) {
+            $locations[] = ABSPATH . 'wp-config.php';
+            $locations[] = dirname(rtrim(ABSPATH, '/\\')) . '/wp-config.php';
+        }
+
+        $locations[] = getcwd() . DIRECTORY_SEPARATOR . 'wp-config.php';
+        $locations[] = dirname(getcwd()) . DIRECTORY_SEPARATOR . 'wp-config.php';
+
         foreach ($locations as $loc) {
             if (is_file($loc)) {
                 $this->configPath = realpath($loc);
@@ -109,6 +118,10 @@ class BootstrapInspector implements DiagnosticInterface
     {
         if (empty($this->dbCreds['name'])) {
             return ['success' => false, 'error' => 'Could not extract DB_NAME from config file.'];
+        }
+
+        if (!class_exists('mysqli')) {
+            return ['success' => false, 'error' => 'MySQLi extension is not available.'];
         }
 
         $mysqli = @new \mysqli(

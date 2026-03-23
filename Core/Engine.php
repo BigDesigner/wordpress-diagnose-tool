@@ -65,18 +65,49 @@ class Engine
         return $reports;
     }
 
-    public function performFix(string $agentName, string $fixId): bool
+    /**
+     * Executes a fix action and normalizes the result for the API/UI layer.
+     *
+     * @return array{success: bool, message: string, data: mixed}
+     */
+    public function performFix(string $agentName, string $fixId): array
     {
         error_log("[WP Diagnose Engine] performAction POST Payload: " . print_r($_POST, true));
         error_log("[WP Diagnose Engine] performAction triggered - Agent: {$agentName}, ActionType: {$fixId}");
         
         if (!isset($this->agents[$agentName])) {
             error_log("[WP Diagnose Engine] WARNING: Agent {$agentName} not registered.");
-            return false;
+            return [
+                'success' => false,
+                'message' => "Agent not registered: {$agentName}",
+                'data' => null,
+            ];
         }
 
-        $result = $this->agents[$agentName]->fix($fixId);
-        error_log("[WP Diagnose Engine] Action {$fixId} on {$agentName} returning " . ($result ? 'TRUE' : 'FALSE'));
-        return $result;
+        try {
+            $result = $this->agents[$agentName]->fix($fixId);
+            $response = [
+                'success' => $result,
+                'message' => $result ? "Action completed: {$fixId}" : "Action failed: {$fixId}",
+                'data' => null,
+            ];
+
+            if (method_exists($this->agents[$agentName], 'getLastActionResult')) {
+                $agentResponse = $this->agents[$agentName]->getLastActionResult();
+                if (is_array($agentResponse)) {
+                    $response = array_merge($response, $agentResponse);
+                }
+            }
+
+            error_log("[WP Diagnose Engine] Action {$fixId} on {$agentName} returning " . ($response['success'] ? 'TRUE' : 'FALSE'));
+            return $response;
+        } catch (\Throwable $e) {
+            error_log("[WP Diagnose Engine] ERROR during action {$fixId} on {$agentName}: " . $e->getMessage());
+            return [
+                'success' => false,
+                'message' => 'Action crashed: ' . $e->getMessage(),
+                'data' => null,
+            ];
+        }
     }
 }

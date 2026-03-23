@@ -14,6 +14,7 @@ class CoreOperationsAgent implements DiagnosticInterface
 {
     private array $results = [];
     private bool $isWpLoaded;
+    private array $lastActionResult = ['success' => true, 'message' => '', 'data' => null];
 
     public function __construct(bool $isWpLoaded = false)
     {
@@ -59,6 +60,8 @@ class CoreOperationsAgent implements DiagnosticInterface
 
     public function fix(string $id): bool
     {
+        $this->lastActionResult = ['success' => false, 'message' => 'Unknown core operation.', 'data' => null];
+
         if ($id === 'toggle_wp_debug') {
             return $this->toggleConfig('WP_DEBUG');
         } elseif ($id === 'toggle_savequeries') {
@@ -85,9 +88,14 @@ class CoreOperationsAgent implements DiagnosticInterface
         return $this->results ?: $this->check();
     }
 
+    public function getLastActionResult(): array
+    {
+        return $this->lastActionResult;
+    }
+
     private function parseWpConfig(): array
     {
-        $configPath = ABSPATH . 'wp-config.php';
+        $configPath = $this->locateWpConfigPath();
         if (!is_file($configPath)) return [];
 
         $content = file_get_contents($configPath);
@@ -99,16 +107,28 @@ class CoreOperationsAgent implements DiagnosticInterface
         if (preg_match("/define\(\s*['\"]SAVEQUERIES['\"]\s*,\s*(true|false)\s*\)/i", $content, $matches)) {
             $vars['SAVEQUERIES'] = strtolower($matches[1]);
         }
+        if (preg_match("/define\(\s*['\"]WP_ENVIRONMENT_TYPE['\"]\s*,\s*['\"]([^'\"]+)['\"]\s*\)/i", $content, $matches)) {
+            $vars['WP_ENVIRONMENT_TYPE'] = $matches[1];
+        }
         return $vars;
     }
 
     private function toggleConfig(string $constant): bool
     {
-        $configPath = ABSPATH . 'wp-config.php';
-        if (!is_writable($configPath)) return false;
+        $configPath = $this->locateWpConfigPath();
+        if (!is_file($configPath) || !is_writable($configPath)) {
+            $this->lastActionResult = [
+                'success' => false,
+                'message' => "Config file is not writable for {$constant}.",
+                'data' => ['constant' => $constant],
+            ];
+            return false;
+        }
 
         $content = file_get_contents($configPath);
         $current = 'false';
+        $newVal = 'true';
+        $replacements = 0;
         
         if (preg_match("/define\(\s*['\"]{$constant}['\"]\s*,\s*(true|false)\s*\)/i", $content, $matches)) {
             $current = strtolower($matches[1]);
@@ -116,25 +136,57 @@ class CoreOperationsAgent implements DiagnosticInterface
             $content = preg_replace(
                 "/define\(\s*['\"]{$constant}['\"]\s*,\s*(true|false)\s*\)/i",
                 "define('{$constant}', {$newVal})",
-                $content
+                $content,
+                1,
+                $replacements
             );
         } else {
-            // Add if not exists
-            $newVal = 'true';
             $insert = "define('{$constant}', true);\n";
-            $content = preg_replace('/(<\?php)/i', "$1\n$insert", $content, 1);
+            if (strpos($content, "/* That's all, stop editing!") !== false) {
+                $content = str_replace("/* That's all, stop editing!", $insert . "/* That's all, stop editing!", $content);
+                $replacements = 1;
+            } else {
+                $content = preg_replace('/(<\?php)/i', "$1\n$insert", $content, 1, $replacements);
+            }
         }
 
-        return file_put_contents($configPath, $content) !== false;
+        if ($replacements < 1) {
+            $this->lastActionResult = [
+                'success' => false,
+                'message' => "Failed to update {$constant} in wp-config.php.",
+                'data' => ['constant' => $constant],
+            ];
+            return false;
+        }
+
+        $written = file_put_contents($configPath, $content) !== false;
+        $this->lastActionResult = [
+            'success' => $written,
+            'message' => $written ? "{$constant} set to {$newVal}." : "Failed to write wp-config.php for {$constant}.",
+            'data' => ['constant' => $constant, 'value' => $newVal],
+        ];
+        return $written;
     }
 
     private function toggleMaintenance(): bool
     {
         $file = ABSPATH . '.maintenance';
         if (is_file($file)) {
-            return unlink($file);
+            $result = unlink($file);
+            $this->lastActionResult = [
+                'success' => $result,
+                'message' => $result ? 'Maintenance mode disabled.' : 'Failed to disable maintenance mode.',
+                'data' => ['maintenance_mode' => $result ? 'inactive' : 'active'],
+            ];
+            return $result;
         } else {
-            return file_put_contents($file, '<?php $upgrading = time(); ?>') !== false;
+            $result = file_put_contents($file, '<?php $upgrading = time(); ?>') !== false;
+            $this->lastActionResult = [
+                'success' => $result,
+                'message' => $result ? 'Maintenance mode enabled.' : 'Failed to enable maintenance mode.',
+                'data' => ['maintenance_mode' => $result ? 'active' : 'inactive'],
+            ];
+            return $result;
         }
     }
 
@@ -175,16 +227,53 @@ class CoreOperationsAgent implements DiagnosticInterface
             $wpdb->query("DELETE FROM `{$wpdb->options}` WHERE `option_name` LIKE '_transient_%' OR `option_name` LIKE '_site_transient_%'");
         }
 
+        $this->lastActionResult = [
+            'success' => true,
+            'message' => 'Cache flush routine completed.',
+            'data' => null,
+        ];
         return true;
     }
 
     private function updateCore(): bool
     {
-        if (!$this->isWpLoaded) return false;
+        if (!$this->isWpLoaded) {
+            $this->lastActionResult = [
+                'success' => false,
+                'message' => 'Core update requires a fully loaded WordPress environment.',
+                'data' => null,
+            ];
+            return false;
+        }
 
-        require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
-        require_once ABSPATH . 'wp-admin/includes/file.php';
-        require_once ABSPATH . 'wp-admin/includes/misc.php';
+        $requiredFiles = [
+            ABSPATH . 'wp-admin/includes/class-wp-upgrader.php',
+            ABSPATH . 'wp-admin/includes/file.php',
+            ABSPATH . 'wp-admin/includes/misc.php',
+            ABSPATH . 'wp-admin/includes/update.php',
+        ];
+
+        foreach ($requiredFiles as $requiredFile) {
+            if (!is_file($requiredFile)) {
+                $this->lastActionResult = [
+                    'success' => false,
+                    'message' => 'Required updater dependency is missing: ' . basename($requiredFile),
+                    'data' => null,
+                ];
+                return false;
+            }
+
+            require_once $requiredFile;
+        }
+
+        if (!function_exists('get_core_updates')) {
+            $this->lastActionResult = [
+                'success' => false,
+                'message' => 'WordPress updater APIs are unavailable.',
+                'data' => null,
+            ];
+            return false;
+        }
 
         ob_start();
         $upgrader = new \Core_Upgrader(new \Automatic_Upgrader_Skin());
@@ -204,16 +293,27 @@ class CoreOperationsAgent implements DiagnosticInterface
         }
         ob_end_clean();
 
-        return !is_wp_error($result) && $result;
+        $success = !is_wp_error($result) && $result;
+        $this->lastActionResult = [
+            'success' => $success,
+            'message' => $success ? 'WordPress core update completed.' : 'WordPress core update failed or no update was available.',
+            'data' => null,
+        ];
+        return $success;
     }
 
     private function resetPassword(string $username): bool
     {
-        $newPass = 'Pass_12345!'; // Generate a simple fallback temp password
+        $newPass = $this->generateTemporaryPassword();
         if ($this->isWpLoaded && function_exists('wp_set_password')) {
             $user = get_user_by('login', $username);
             if ($user) {
                 wp_set_password($newPass, $user->ID);
+                $this->lastActionResult = [
+                    'success' => true,
+                    'message' => "Temporary password generated for {$username}: {$newPass}",
+                    'data' => ['username' => $username, 'temporary_password' => $newPass],
+                ];
                 return true;
             }
         } else {
@@ -224,10 +324,49 @@ class CoreOperationsAgent implements DiagnosticInterface
                 $stmt = $DB->mysqli->prepare("UPDATE `{$DB->prefix}users` SET `user_pass` = ? WHERE `user_login` = ?");
                 $stmt->bind_param('ss', $hash, $username);
                 $stmt->execute();
-                return $stmt->affected_rows > 0;
+                $success = $stmt->affected_rows > 0;
+                $this->lastActionResult = [
+                    'success' => $success,
+                    'message' => $success
+                        ? "Temporary password generated for {$username}: {$newPass}"
+                        : "Could not reset password for {$username}.",
+                    'data' => $success ? ['username' => $username, 'temporary_password' => $newPass] : ['username' => $username],
+                ];
+                return $success;
             }
         }
+
+        $this->lastActionResult = [
+            'success' => false,
+            'message' => "Could not reset password for {$username}.",
+            'data' => ['username' => $username],
+        ];
         return false;
+    }
+
+    private function locateWpConfigPath(): string
+    {
+        $candidates = [
+            ABSPATH . 'wp-config.php',
+            dirname(rtrim(ABSPATH, '/\\')) . '/wp-config.php',
+        ];
+
+        foreach ($candidates as $candidate) {
+            if (is_file($candidate)) {
+                return $candidate;
+            }
+        }
+
+        return ABSPATH . 'wp-config.php';
+    }
+
+    private function generateTemporaryPassword(): string
+    {
+        try {
+            return 'Tmp_' . bin2hex(random_bytes(6)) . '!';
+        } catch (\Throwable $e) {
+            return 'Tmp_' . substr(sha1((string) microtime(true)), 0, 12) . '!';
+        }
     }
 
     private function outputErrorLog(): void

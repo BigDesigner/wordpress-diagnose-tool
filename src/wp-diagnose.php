@@ -9,17 +9,17 @@
  * v0.2.4-beta - Current stable beta baseline.
  */
 
-require_once __DIR__ . '/Core/DiagnosticInterface.php';
-require_once __DIR__ . '/Core/Engine.php';
-require_once __DIR__ . '/Core/Cleanup.php';
-require_once __DIR__ . '/src/Agents/ServerInspector/ServerInspector.php';
-require_once __DIR__ . '/src/Agents/WPInspector/WPInspector.php';
-require_once __DIR__ . '/src/Agents/SecurityInspector/SecurityInspector.php';
-require_once __DIR__ . '/src/Agents/BootstrapInspector/BootstrapInspector.php';
-require_once __DIR__ . '/src/Agents/DBHealth/DBHealth.php';
-require_once __DIR__ . '/src/Agents/CoreIntegrityAgent/CoreIntegrityAgent.php';
-require_once __DIR__ . '/src/Agents/AssetManagerAgent/AssetManagerAgent.php';
-require_once __DIR__ . '/src/Agents/CoreOperationsAgent/CoreOperationsAgent.php';
+require_once dirname(__DIR__) . '/Core/DiagnosticInterface.php';
+require_once dirname(__DIR__) . '/Core/Engine.php';
+require_once dirname(__DIR__) . '/Core/Cleanup.php';
+require_once __DIR__ . '/Agents/ServerInspector/ServerInspector.php';
+require_once __DIR__ . '/Agents/WPInspector/WPInspector.php';
+require_once __DIR__ . '/Agents/SecurityInspector/SecurityInspector.php';
+require_once __DIR__ . '/Agents/BootstrapInspector/BootstrapInspector.php';
+require_once __DIR__ . '/Agents/DBHealth/DBHealth.php';
+require_once __DIR__ . '/Agents/CoreIntegrityAgent/CoreIntegrityAgent.php';
+require_once __DIR__ . '/Agents/AssetManagerAgent/AssetManagerAgent.php';
+require_once __DIR__ . '/Agents/CoreOperationsAgent/CoreOperationsAgent.php';
 
 // -------------------- WP-CLI INTEGRATION --------------------
 if (defined('WP_CLI') && WP_CLI) {
@@ -136,6 +136,9 @@ class WPD_DB
     function get_option($name)
     {
         $stmt = $this->mysqli->prepare("SELECT option_value FROM {$this->prefix}options WHERE option_name=? LIMIT 1");
+        if (!$stmt) {
+            return null;
+        }
         $stmt->bind_param("s", $name);
         $stmt->execute();
         $stmt->bind_result($val);
@@ -146,27 +149,54 @@ class WPD_DB
         $stmt->close();
         return null;
     }
-    function update_option($name, $value)
+    function update_option($name, $value): bool
     {
         $stmt = $this->mysqli->prepare("SELECT option_id FROM {$this->prefix}options WHERE option_name=? LIMIT 1");
+        if (!$stmt) {
+            return false;
+        }
         $stmt->bind_param("s", $name);
         $stmt->execute();
         $stmt->store_result();
-        $exists = $stmt->fetch();
+        $exists = $stmt->num_rows > 0;
         $stmt->close();
         if ($exists) {
             $stmt = $this->mysqli->prepare("UPDATE {$this->prefix}options SET option_value=? WHERE option_name=?");
+            if (!$stmt) {
+                return false;
+            }
             $stmt->bind_param("ss", $value, $name);
-            $stmt->execute();
+            $result = $stmt->execute();
             $stmt->close();
+            return $result;
         } else {
             $autoload = 'no';
             $stmt = $this->mysqli->prepare("INSERT INTO {$this->prefix}options (option_name, option_value, autoload) VALUES (?,?,?)");
+            if (!$stmt) {
+                return false;
+            }
             $stmt->bind_param("sss", $name, $value, $autoload);
-            $stmt->execute();
+            $result = $stmt->execute();
             $stmt->close();
+            return $result;
         }
     }
+}
+
+function wpd_find_config_path(): ?string
+{
+    $candidates = [
+        ABSPATH . 'wp-config.php',
+        dirname(rtrim(ABSPATH, '/\\')) . '/wp-config.php',
+    ];
+
+    foreach ($candidates as $candidate) {
+        if (is_file($candidate)) {
+            return $candidate;
+        }
+    }
+
+    return null;
 }
 
 // -------------------- Emergency Independent DB Connection --------------------
@@ -174,8 +204,8 @@ $DB = null;
 $DB_ERR = '';
 
 // ALWAYS parse wp-config.php for direct SQL access (bypassing high-level WP ops)
-$config_path = ABSPATH . 'wp-config.php';
-if (is_file($config_path)) {
+$config_path = wpd_find_config_path();
+if ($config_path && is_file($config_path)) {
     $cfg = file_get_contents($config_path);
     
     $db_host = preg_match("/define\(\s*['\"]DB_HOST['\"]\s*,\s*['\"](.*?)['\"]\s*\)/i", $cfg, $m) ? $m[1] : 'localhost';
@@ -214,7 +244,7 @@ if ($is_json || isset($_GET['action'])) {
         $engine->registerAgent(new \WPDiagnose\Agents\AssetManagerAgent\AssetManagerAgent($WP_LOADED));
         $engine->registerAgent(new \WPDiagnose\Agents\CoreOperationsAgent\CoreOperationsAgent($WP_LOADED));
 
-        $response = ['success' => true, 'data' => []];
+        $response = ['success' => true, 'message' => '', 'data' => []];
 
         if (isset($_GET['action'])) {
             if ($_GET['action'] === 'fix') {
@@ -222,9 +252,14 @@ if ($is_json || isset($_GET['action'])) {
                 $id    = $_POST['id'] ?? $_GET['id'] ?? '';
                 
                 wpd_log_action('API_FIX_POST', "Agent: $agent | FixID: $id | WP_LOADED: " . ($WP_LOADED ? 'YES' : 'NO'));
-                $response['success'] = $engine->performFix($agent, $id);
+                $response = $engine->performFix($agent, $id);
             } elseif ($_GET['action'] === 'self_destruct') {
-                $response['success'] = \WPDiagnose\Core\Cleanup::fullWipe();
+                $success = \WPDiagnose\Core\Cleanup::fullWipe();
+                $response = [
+                    'success' => $success,
+                    'message' => $success ? 'Self-destruct completed.' : 'Self-destruct was blocked or incomplete.',
+                    'data' => null,
+                ];
             } elseif ($_GET['action'] === 'fetch_report') {
                 $reports = $engine->getReports();
                 while (ob_get_level()) ob_end_clean(); // Guaranteed clean output
@@ -254,7 +289,7 @@ if ($is_json || isset($_GET['action'])) {
             while (ob_get_level()) ob_end_clean();
             header('Content-Type: application/json; charset=utf-8');
             echo json_encode([
-                'status'  => 'error', 
+                'success' => false,
                 'message' => 'API Engine Crash: ' . $e->getMessage()
             ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
             exit;
@@ -279,10 +314,10 @@ if ($file_age > $expiration_time) {
     wpd_log_action('AUTO_DESTRUCT', 'TTL exceeded 60 minutes. Initiating self-destruct.');
     if (\WPDiagnose\Core\Cleanup::fullWipe()) {
         header('Content-Type: text/html; charset=utf-8');
-        exit('<div style="background:#000;color:#00b84f;padding:20px;text-align:center;">WP Diagnose dosyasÄ± ve tÃ¼m yardÄ±mcÄ± modÃ¼ller gÃ¼venlik iÃ§in silinmiÅŸtir.</div>');
+        exit('<div style="background:#000;color:#00b84f;padding:20px;text-align:center;">WP Diagnose dosyasi ve tum yardimci moduller guvenlik icin silinmistir.</div>');
     } else {
         header('Content-Type: text/html; charset=utf-8');
-        exit('<div style="background:#000;color:#ef4444;padding:20px;text-align:center;">UYARI: Dosyalar otomatik olarak silinemedi. LÃ¼tfen gÃ¼venlik iÃ§in manuel olarak silin.</div>');
+        exit('<div style="background:#000;color:#ef4444;padding:20px;text-align:center;">UYARI: Dosyalar otomatik olarak silinemedi. Lutfen guvenlik icin manuel olarak silin.</div>');
     }
 }
 // -------------------- End Self-Destruct --------------------
@@ -538,7 +573,7 @@ if ($file_age > $expiration_time) {
                             try {
                                 this.reports = await response.json();
                                 // Check if the backend reported a graceful crash
-                                if (this.reports.status === 'error') {
+                                if (this.reports.status === 'error' || (this.reports.success === false && this.reports.message)) {
                                     alert('API Bağlantı Hatası: ' + this.reports.message);
                                     this.reports = {};
                                 }
@@ -620,11 +655,11 @@ if ($file_age > $expiration_time) {
                         });
                         const result = await response.json();
                         if (result.success) {
-                            alert('Action executed successfully! Scanning...');
-                            this.fetchReport();
+                            alert(result.message || 'Action executed successfully.');
+                            await this.fetchReport();
                         } else {
-                            alert('Recovery failed or blocked. Manual intervention advised.');
-                            this.fetchReport(); // Revert optimistic UI
+                            alert(result.message || 'Recovery failed or blocked. Manual intervention advised.');
+                            await this.fetchReport(); // Revert optimistic UI
                         }
                     } catch (e) {
                         alert('API Communication Timeout or Error: ' + e.message);

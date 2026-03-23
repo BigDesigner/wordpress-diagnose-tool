@@ -17,16 +17,10 @@ class Cleanup
      */
     public static function fullWipe(): bool
     {
-        $baseDir = dirname(__DIR__); // Assumes calling from Core/Cleanup.php
-        $targets = [
-            $baseDir . '/Core',
-            $baseDir . '/src',
-            $baseDir . '/.ht-wp-diagnose.log'
-        ];
-
         $success = true;
+        $roots = self::detectRoots();
 
-        foreach ($targets as $target) {
+        foreach (self::buildTargets($roots) as $target) {
             if (is_dir($target)) {
                 $success = $success && self::recursiveRmdir($target);
             } elseif (is_file($target)) {
@@ -34,13 +28,61 @@ class Cleanup
             }
         }
 
-        // Self-delete the main entry file if it exists in the same root
-        $mainFile = $baseDir . '/wp-diagnose.php';
-        if (is_file($mainFile)) {
-            $success = $success && @unlink($mainFile);
+        return $success;
+    }
+
+    /**
+     * Detects likely project roots for both source and bundled deployments.
+     *
+     * @return array<int, string>
+     */
+    private static function detectRoots(): array
+    {
+        $roots = [basename(__DIR__) === 'Core' ? dirname(__DIR__) : __DIR__];
+        $scriptFile = $_SERVER['SCRIPT_FILENAME'] ?? '';
+
+        if (is_string($scriptFile) && $scriptFile !== '') {
+            $scriptDir = dirname($scriptFile);
+            $roots[] = $scriptDir;
+
+            if (basename($scriptDir) === 'src') {
+                $roots[] = dirname($scriptDir);
+            }
         }
 
-        return $success;
+        return array_values(array_unique(array_filter($roots, 'is_dir')));
+    }
+
+    /**
+     * Builds the list of files and directories that belong to this tool.
+     *
+     * @param array<int, string> $roots
+     * @return array<int, string>
+     */
+    private static function buildTargets(array $roots): array
+    {
+        $targets = [];
+        $scriptFile = $_SERVER['SCRIPT_FILENAME'] ?? '';
+        $scriptDir = is_string($scriptFile) && $scriptFile !== '' ? dirname($scriptFile) : '';
+
+        foreach ($roots as $root) {
+            $targets[] = $root . '/Core';
+            $targets[] = $root . '/src';
+            $targets[] = $root . '/.ht-wp-diagnose.log';
+            $targets[] = $root . '/wp-diagnose.php';
+            $targets[] = $root . '/wp-diagnose-pro.php';
+
+            // Only remove the redirect stub when the tool is running from its own subdirectory.
+            if ($scriptDir !== '' && $root === $scriptDir && basename($root) === 'diagnose') {
+                $targets[] = $root . '/index.php';
+            }
+        }
+
+        if (is_string($scriptFile) && $scriptFile !== '') {
+            $targets[] = $scriptFile;
+        }
+
+        return array_values(array_unique($targets));
     }
 
     /**
