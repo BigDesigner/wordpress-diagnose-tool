@@ -152,6 +152,46 @@ final class AgentSmokeTest extends TestCase
         }
     }
 
+    public function testThreatIntelAgentReadsNormalizedFindingsFromLocalCache(): void
+    {
+        wpd_tests_write('wp-includes/version.php', "<?php\n\$wp_version = '6.8.1';\n");
+        wpd_tests_write('wp-content/.wpd-threat-intel-cache.json', json_encode([
+            'updated_at' => '2026-03-23T10:00:00Z',
+            'records' => [
+                'wf-1' => [
+                    'title' => 'Sample plugin vulnerability',
+                    'software' => [
+                        [
+                            'type' => 'plugin',
+                            'name' => 'Sample Plugin',
+                            'slug' => 'sample-plugin',
+                            'affected_versions' => [
+                                [
+                                    'from_version' => '*',
+                                    'to_version' => '1.2.3',
+                                    'from_inclusive' => true,
+                                    'to_inclusive' => true,
+                                ],
+                            ],
+                            'patched_versions' => ['1.2.4'],
+                        ],
+                    ],
+                    'cve' => 'CVE-2026-0001',
+                    'cvss' => ['rating' => 'High', 'score' => 8.8],
+                    'references' => ['https://example.test/advisory'],
+                    'published' => '2026-03-20T10:00:00Z',
+                ],
+            ],
+        ], JSON_UNESCAPED_SLASHES));
+        wpd_tests_write('wp-content/plugins/sample-plugin/sample-plugin.php', "<?php\n/*\nPlugin Name: Sample Plugin\nVersion: 1.2.3\n*/\n");
+
+        $report = (new ThreatIntelAgent(false))->check();
+
+        self::assertSame('OK', $report['feed_status']['status']);
+        self::assertSame('ERROR', $report['vulnerability_overview']['status']);
+        self::assertArrayHasKey('known_vulnerabilities', $report);
+    }
+
     public function testMalwareInspectorFlagsUploadsPhpAndUnexpectedRootPhp(): void
     {
         wpd_tests_write('wp-content/uploads/2026/03/u5.php', "<?php echo 'shell';");

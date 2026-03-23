@@ -7,7 +7,6 @@ use WPDiagnose\Core\DiagnosticInterface;
 
 final class ThreatIntelAgent implements DiagnosticInterface
 {
-    private const DEFAULT_CACHE_TTL = 21600;
     private const OPTION_API_KEY = 'wpd_wordfence_api_key';
     private const DOCS_URL = 'https://www.wordfence.com/help/wordfence-intelligence/v3-accessing-and-consuming-the-vulnerability-data-feed/';
 
@@ -47,10 +46,12 @@ final class ThreatIntelAgent implements DiagnosticInterface
             ),
         ];
 
+        $cacheMeta = $this->getFeedCacheMeta();
+
         $this->results['intel_configuration'] = [
             'status' => $this->hasConfiguredApiKey() ? 'OK' : 'WARN',
             'info' => $this->hasConfiguredApiKey()
-                ? 'Wordfence API key is configured. Live vulnerability matching is enabled when the feed is reachable.'
+                ? 'Wordfence API key is configured. Use Sync Feed to refresh the cached vulnerability intelligence dataset.'
                 : 'Wordfence API key is not configured yet. Add a free API key to enable live CVE matching.',
             'data' => [
                 'provider' => 'Wordfence Intelligence V3',
@@ -58,13 +59,17 @@ final class ThreatIntelAgent implements DiagnosticInterface
                 'api_key_source' => $this->getApiKeySource(),
                 'api_key_hint' => $this->maskApiKey($this->getConfiguredApiKey()),
                 'docs_url' => self::DOCS_URL,
+                'cache_status' => $cacheMeta['status'],
+                'cache_updated_at' => $cacheMeta['updated_at'],
             ],
         ];
 
         if (($feed['status'] ?? 'WARN') !== 'OK' || !isset($feed['data']) || !is_array($feed['data'])) {
             $this->results['vulnerability_overview'] = [
                 'status' => 'WARN',
-                'info' => 'Threat intelligence feed unavailable. Configure WPD_WORDFENCE_API_KEY to enable CVE matching.',
+                'info' => $this->hasConfiguredApiKey()
+                    ? 'Threat intelligence cache unavailable. Save the API key and trigger Sync Feed to populate local CVE data.'
+                    : 'Threat intelligence feed unavailable. Configure a Wordfence API key to enable CVE matching.',
             ];
             return $this->results;
         }
@@ -113,6 +118,10 @@ final class ThreatIntelAgent implements DiagnosticInterface
             return $this->clearWordfenceApiKey();
         }
 
+        if ($id === 'refresh_threat_feed') {
+            return $this->refreshThreatFeed();
+        }
+
         return false;
     }
 
@@ -143,29 +152,39 @@ final class ThreatIntelAgent implements DiagnosticInterface
      */
     private function loadWordfenceFeed(): array
     {
-        $apiKey = $this->getConfiguredApiKey();
-        if ($apiKey === '') {
+        $cacheFile = $this->getCacheFilePath();
+        if (!is_file($cacheFile)) {
             return [
                 'status' => 'WARN',
-                'message' => 'Wordfence V3 API key missing. Set WPD_WORDFENCE_API_KEY to enable live vulnerability intelligence.',
+                'message' => 'Threat intelligence cache is empty. Run Sync Feed after saving a Wordfence API key.',
             ];
         }
 
-        $cacheFile = rtrim(ABSPATH, '/\\') . '/wp-content/.wpd-threat-intel-cache.json';
-        $cacheTtl = (int) (getenv('WPD_THREAT_FEED_TTL') ?: self::DEFAULT_CACHE_TTL);
-        if ($cacheTtl < 60) {
-            $cacheTtl = self::DEFAULT_CACHE_TTL;
+        $cached = json_decode((string) file_get_contents($cacheFile), true);
+        if (!is_array($cached) || !isset($cached['records']) || !is_array($cached['records'])) {
+            return [
+                'status' => 'WARN',
+                'message' => 'Threat intelligence cache file is invalid. Run Sync Feed to rebuild it.',
+            ];
         }
 
-        if (is_file($cacheFile) && (time() - (int) filemtime($cacheFile)) < $cacheTtl) {
-            $cached = json_decode((string) file_get_contents($cacheFile), true);
-            if (is_array($cached)) {
-                return [
-                    'status' => 'OK',
-                    'message' => 'Wordfence Intelligence feed loaded from cache.',
-                    'data' => $cached,
-                ];
-            }
+        return [
+            'status' => 'OK',
+            'message' => 'Threat intelligence data loaded from local cache.',
+            'data' => $cached['records'],
+        ];
+    }
+
+    private function refreshThreatFeed(): bool
+    {
+        $apiKey = $this->getConfiguredApiKey();
+        if ($apiKey === '') {
+            $this->lastActionResult = [
+                'success' => false,
+                'message' => 'Wordfence API key is required before syncing the feed.',
+                'data' => null,
+            ];
+            return false;
         }
 
         $feedUrl = getenv('WPD_WORDFENCE_FEED_URL') ?: 'https://www.wordfence.com/api/intelligence/v3/vulnerabilities/production';
@@ -175,23 +194,35 @@ final class ThreatIntelAgent implements DiagnosticInterface
         ]);
 
         if (!is_array($payload)) {
-            return [
-                'status' => 'WARN',
+            $this->lastActionResult = [
+                'success' => false,
                 'message' => 'Wordfence Intelligence feed request failed or returned invalid JSON.',
+                'data' => null,
             ];
+            return false;
         }
 
+        $normalized = $this->normalizeFeed($payload);
+        $cacheFile = $this->getCacheFilePath();
         $cacheDir = dirname($cacheFile);
         if (!is_dir($cacheDir)) {
             @mkdir($cacheDir, 0755, true);
         }
-        @file_put_contents($cacheFile, json_encode($payload, JSON_UNESCAPED_SLASHES));
 
-        return [
-            'status' => 'OK',
-            'message' => 'Wordfence Intelligence V3 production feed loaded successfully.',
-            'data' => $payload,
+        $written = @file_put_contents($cacheFile, json_encode([
+            'updated_at' => gmdate('c'),
+            'records' => $normalized,
+        ], JSON_UNESCAPED_SLASHES));
+
+        $success = $written !== false;
+        $this->lastActionResult = [
+            'success' => $success,
+            'message' => $success
+                ? 'Threat intelligence feed synced successfully.'
+                : 'Threat intelligence feed was downloaded but could not be cached locally.',
+            'data' => $success ? ['records' => count($normalized)] : null,
         ];
+        return $success;
     }
 
     private function saveWordfenceApiKey(): bool
@@ -242,6 +273,31 @@ final class ThreatIntelAgent implements DiagnosticInterface
         return is_string($storedValue) ? trim($storedValue) : '';
     }
 
+    private function getCacheFilePath(): string
+    {
+        return rtrim(ABSPATH, '/\\') . '/wp-content/.wpd-threat-intel-cache.json';
+    }
+
+    /**
+     * @return array{status: string, updated_at: string}
+     */
+    private function getFeedCacheMeta(): array
+    {
+        $cacheFile = $this->getCacheFilePath();
+        if (!is_file($cacheFile)) {
+            return [
+                'status' => 'missing',
+                'updated_at' => 'never',
+            ];
+        }
+
+        $cached = json_decode((string) file_get_contents($cacheFile), true);
+        return [
+            'status' => 'ready',
+            'updated_at' => is_array($cached) && isset($cached['updated_at']) ? (string) $cached['updated_at'] : gmdate('c', (int) filemtime($cacheFile)),
+        ];
+    }
+
     private function getApiKeySource(): string
     {
         if (trim((string) (getenv('WPD_WORDFENCE_API_KEY') ?: '')) !== '') {
@@ -262,6 +318,51 @@ final class ThreatIntelAgent implements DiagnosticInterface
         }
 
         return substr($apiKey, 0, 4) . str_repeat('*', max(4, strlen($apiKey) - 8)) . substr($apiKey, -4);
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @return array<string, mixed>
+     */
+    private function normalizeFeed(array $payload): array
+    {
+        $normalized = [];
+
+        foreach ($payload as $id => $record) {
+            if (!is_array($record) || !isset($record['software']) || !is_array($record['software'])) {
+                continue;
+            }
+
+            $softwareRecords = [];
+            foreach ($record['software'] as $software) {
+                if (!is_array($software) || !isset($software['type'], $software['slug'], $software['affected_versions'])) {
+                    continue;
+                }
+
+                $softwareRecords[] = [
+                    'type' => $software['type'],
+                    'name' => $software['name'] ?? $software['slug'],
+                    'slug' => $software['slug'],
+                    'affected_versions' => $software['affected_versions'],
+                    'patched_versions' => $software['patched_versions'] ?? [],
+                ];
+            }
+
+            if ($softwareRecords === []) {
+                continue;
+            }
+
+            $normalized[$id] = [
+                'title' => $record['title'] ?? 'Unknown vulnerability',
+                'software' => $softwareRecords,
+                'cve' => $record['cve'] ?? null,
+                'cvss' => $record['cvss'] ?? [],
+                'references' => $record['references'] ?? [],
+                'published' => $record['published'] ?? null,
+            ];
+        }
+
+        return $normalized;
     }
 
     /**
@@ -291,12 +392,22 @@ final class ThreatIntelAgent implements DiagnosticInterface
     private function setOption(string $name, $value): bool
     {
         if ($this->isWpLoaded && function_exists('update_option')) {
+            if (function_exists('get_option') && get_option($name, null) === $value) {
+                return true;
+            }
+
             return update_option($name, $value);
         }
 
         global $DB;
         if ($DB) {
-            return $DB->update_option($name, is_scalar($value) ? (string) $value : json_encode($value, JSON_UNESCAPED_SLASHES));
+            $currentValue = $DB->get_option($name);
+            $serializedValue = is_scalar($value) ? (string) $value : json_encode($value, JSON_UNESCAPED_SLASHES);
+            if ((string) $currentValue === (string) $serializedValue) {
+                return true;
+            }
+
+            return $DB->update_option($name, $serializedValue);
         }
 
         return false;

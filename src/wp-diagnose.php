@@ -520,6 +520,24 @@ if ($file_age > $expiration_time) {
                                                 >Clear</button>
                                             </div>
 
+                                            <div class="flex flex-wrap items-center gap-3">
+                                                <button
+                                                    type="button"
+                                                    @click.prevent.stop="syncThreatIntelFeed()"
+                                                    :disabled="finding.data.api_key_status !== 'configured'"
+                                                    class="rounded border px-4 py-2 text-[10px] font-bold uppercase tracking-[0.2em] transition"
+                                                    :class="finding.data.api_key_status === 'configured'
+                                                        ? 'border-sky-500/40 bg-sky-500/10 text-sky-300 hover:bg-sky-500/20'
+                                                        : 'border-slate-700 bg-slate-800 text-slate-500 cursor-not-allowed'"
+                                                >Sync Feed</button>
+                                                <div class="text-[11px] text-slate-500">
+                                                    Feed cache: <span class="text-slate-200" x-text="finding.data.cache_status"></span>
+                                                </div>
+                                                <div class="text-[11px] text-slate-500">
+                                                    Last sync: <span class="text-slate-200" x-text="finding.data.cache_updated_at"></span>
+                                                </div>
+                                            </div>
+
                                             <div class="grid gap-2 text-[11px] text-slate-400 md:grid-cols-2">
                                                 <div>Provider: <span class="text-slate-200" x-text="finding.data.provider"></span></div>
                                                 <div>Key status: <span class="text-slate-200" x-text="finding.data.api_key_status"></span></div>
@@ -804,14 +822,27 @@ if ($file_age > $expiration_time) {
                     return this.attemptFix(agent, actionId);
                 },
                 async saveThreatIntelApiKey() {
-                    return this.attemptFix('ThreatIntelAgent', 'save_wordfence_api_key', {
+                    const success = await this.attemptFix('ThreatIntelAgent', 'save_wordfence_api_key', {
                         wordfence_api_key: this.threatIntelApiKeyDraft
                     }, {
                         skipConfirm: true
                     });
+                    if (success) {
+                        this.threatIntelApiKeyDraft = '';
+                    }
+                    return success;
                 },
                 async clearThreatIntelApiKey() {
-                    return this.attemptFix('ThreatIntelAgent', 'clear_wordfence_api_key', {}, {
+                    const success = await this.attemptFix('ThreatIntelAgent', 'clear_wordfence_api_key', {}, {
+                        skipConfirm: true
+                    });
+                    if (success) {
+                        this.threatIntelApiKeyDraft = '';
+                    }
+                    return success;
+                },
+                async syncThreatIntelFeed() {
+                    return this.attemptFix('ThreatIntelAgent', 'refresh_threat_feed', {}, {
                         skipConfirm: true
                     });
                 },
@@ -825,7 +856,7 @@ if ($file_age > $expiration_time) {
                     });
 
                     if (!confirmed) {
-                        return;
+                        return false;
                     }
 
                     this.loading = true;
@@ -856,17 +887,36 @@ if ($file_age > $expiration_time) {
                             method: 'POST',
                             body: fd
                         });
-                        const result = await response.json();
+                        const raw = await response.text();
+                        if (!raw.trim()) {
+                            this.notify('Action API returned an empty response.', 'error');
+                            await this.fetchReport();
+                            return false;
+                        }
+
+                        let result;
+                        try {
+                            result = JSON.parse(raw);
+                        } catch (parseError) {
+                            console.error('[WP Diagnose] Non-JSON action response:', raw.substring(0, 500));
+                            this.notify('Action API did not return valid JSON.', 'error');
+                            await this.fetchReport();
+                            return false;
+                        }
+
                         if (result.success) {
                             this.notify(result.message || 'Action executed successfully.', 'success');
                             await this.fetchReport();
+                            return true;
                         } else {
                             this.notify(result.message || 'Recovery failed or blocked. Manual intervention advised.', 'error');
                             await this.fetchReport();
+                            return false;
                         }
                     } catch (e) {
                         this.notify('API communication timeout or error: ' + e.message, 'error');
                         this.loading = false;
+                        return false;
                     }
                 },
                 async selfDestruct() {
