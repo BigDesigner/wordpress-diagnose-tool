@@ -54,6 +54,7 @@
 - [Deployment Guide](docs/DEPLOY.md)
 - [Audit Report](docs/AUDIT_REPORT.md)
 - [Architecture Constitution](specs/CONSTITUTION.md)
+- [Security Audit Playbook](SECURITY_AUDIT.md)
 - [Verified Worklog](memory-bank/VERIFIED_WORKLOG.md)
 - [Roadmap / Next Actions](memory-bank/NEXT_ACTIONS.md)
 - [Production Bundle Notes](diagnose/README.md)
