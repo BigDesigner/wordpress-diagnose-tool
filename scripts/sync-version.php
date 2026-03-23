@@ -18,15 +18,34 @@ if (!function_exists('readProjectVersion')) {
     }
 }
 
-if (!function_exists('replaceOrFail')) {
-    function replaceOrFail(string $content, string $pattern, string $replacement, string $file): string
+if (!function_exists('normalizeLineEndings')) {
+    function normalizeLineEndings(string $content): string
     {
-        $updated = preg_replace($pattern, $replacement, $content, 1, $count);
-        if ($updated === null || $count < 1) {
-            throw new RuntimeException("Could not update version marker in {$file}");
+        return str_replace(["\r\n", "\r"], "\n", $content);
+    }
+}
+
+if (!function_exists('replaceOrFail')) {
+    /**
+     * @param string|array<int, string> $patterns
+     */
+    function replaceOrFail(string $content, $patterns, string $replacement, string $file): string
+    {
+        $patternList = is_array($patterns) ? $patterns : [$patterns];
+
+        foreach ($patternList as $pattern) {
+            $updated = preg_replace($pattern, $replacement, $content, 1, $count);
+            if ($updated !== null && $count > 0) {
+                return $updated;
+            }
         }
 
-        return $updated;
+        if (strpos($content, $replacement) !== false) {
+            return $content;
+        }
+
+        $displayPattern = implode(' OR ', $patternList);
+        throw new RuntimeException("Could not update version marker in {$file} using pattern {$displayPattern}");
     }
 }
 
@@ -38,33 +57,44 @@ if (!function_exists('syncProjectVersion')) {
         $targets = [
             'Core/Version.php' => [
                 [
-                    'pattern' => "/public const NUMBER = '[^']+';/",
+                    'patterns' => ["/public const NUMBER = '[^']+';/"],
                     'replacement' => "public const NUMBER = '{$version}';",
                 ],
             ],
             'README.md' => [
                 [
-                    'pattern' => '/^# WP Diagnose PRO \(v[^\)]+\)$/m',
+                    'patterns' => [
+                        '/^# WP Diagnose PRO \(v[^)\r\n]+\)\r?$/m',
+                    ],
                     'replacement' => "# WP Diagnose PRO (v{$version})",
                 ],
                 [
-                    'pattern' => '/^## .* Key Features \(v[^\)]+\)$/m',
+                    'patterns' => [
+                        '/^## Key Features \(v[^)\r\n]+\)\r?$/m',
+                        '/^## .*Key Features \(v[^)\r\n]+\)\r?$/m',
+                    ],
                     'replacement' => "## Key Features (v{$version})",
                 ],
             ],
             'docs/AUDIT_REPORT.md' => [
                 [
-                    'pattern' => '/^# WP Diagnose - Agentic Audit Report \(v[^\)]+\)$/m',
+                    'patterns' => [
+                        '/^# WP Diagnose - Agentic Audit Report \(v[^)\r\n]+\)\r?$/m',
+                    ],
                     'replacement' => "# WP Diagnose - Agentic Audit Report (v{$version})",
                 ],
             ],
             'specs/CONSTITUTION.md' => [
                 [
-                    'pattern' => '/^# WP Diagnose PRO - Standard Constitution \(v[^\)]+\)$/m',
+                    'patterns' => [
+                        '/^# WP Diagnose PRO - Standard Constitution \(v[^)\r\n]+\)\r?$/m',
+                    ],
                     'replacement' => "# WP Diagnose PRO - Standard Constitution (v{$version})",
                 ],
                 [
-                    'pattern' => '/^As of version [^ ]+-PRO,/',
+                    'patterns' => [
+                        '/^\s*As of version [^ ]+-PRO,/m',
+                    ],
                     'replacement' => "As of version {$version}-PRO,",
                 ],
             ],
@@ -76,11 +106,11 @@ if (!function_exists('syncProjectVersion')) {
                 throw new RuntimeException("Sync target not found: {$relativePath}");
             }
 
-            $content = (string) file_get_contents($absolutePath);
+            $content = normalizeLineEndings((string) file_get_contents($absolutePath));
             foreach ($replacements as $replacement) {
                 $content = replaceOrFail(
                     $content,
-                    $replacement['pattern'],
+                    $replacement['patterns'],
                     $replacement['replacement'],
                     $relativePath
                 );
