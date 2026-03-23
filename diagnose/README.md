@@ -1,15 +1,33 @@
-# WP Diagnose PRO - Quick Start
+# WP Diagnose PRO - Distribution Quick Start
 
-This is the production-ready distribution folder.
+This directory contains the production-ready distribution assets.
 
-## Deployment Steps
-1.  Upload the **entire `/diagnose` folder** or just the **`wp-diagnose-pro.php`** file to your WordPress root directory.
-2.  Access via your browser: `https://your-site.com/diagnose/` or `https://your-site.com/wp-diagnose-pro.php?token=YOUR_TOKEN`.
-3.  Ensure you have changed the `DIAG_TOKEN` in the source if you are generating from a custom build.
+## What Is Inside
+- `wp-diagnose-pro.php`: the bundled single-file production build
+- `index.php`: a small redirect helper for folder-based deployment
+- `README.md`: this quick-start guide
 
-## Security
-- Use the **Self-Destruct** button in the dashboard to purge all files after use.
-- The tool includes a recursive wipe mechanism that cleans up all modular directories if present on the server.
+## Deployment Options
 
----
-*For full source and build instructions, see the main project documentation.*
+### Option A: Upload the Entire `diagnose/` Folder
+1. Upload the full `diagnose/` directory to the WordPress root.
+2. Open `https://your-site.example/diagnose/`.
+
+### Option B: Upload Only the Bundle
+1. Upload `wp-diagnose-pro.php` to the WordPress root.
+2. Open `https://your-site.example/wp-diagnose-pro.php?token=YOUR_TOKEN`.
+
+## Recommended Usage Flow
+1. Open the dashboard with a valid token.
+2. Run diagnostics before applying fixes.
+3. Apply only the actions required for the incident.
+4. Confirm the site is healthy again.
+5. Remove the tool after use.
+
+## Security Notes
+- This package is meant for short-lived operational use.
+- Use the dashboard self-destruct flow when the job is complete.
+- Cleanup still depends on the target host allowing file deletion.
+- If you generated a custom build, verify your token and security settings before deployment.
+
+For source-level build and release details, see the main repository documentation.
