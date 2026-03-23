@@ -478,8 +478,12 @@ if ($file_age > $expiration_time) {
                                                                     </td>
                                                                     <td class="px-4 py-3 text-right">
                                                                         <!-- Togglers -->
-                                                                        <button x-show="id === 'manage_plugins'" @click="attemptFix(agent, 'toggle_plugin:' + key)" class="text-[10px] px-3 py-1.5 rounded bg-slate-800 border disabled:opacity-30 border-slate-700 hover:border-amber-500 hover:text-amber-400 transition ml-auto" x-text="props.active ? 'Deactivate' : 'Activate'"></button>
-                                                                        <button x-show="id === 'manage_themes' && !props.active" @click="attemptFix(agent, 'theme_activate:' + key)" class="text-[10px] px-3 py-1.5 rounded bg-slate-800 border disabled:opacity-30 border-slate-700 hover:border-sky-500 hover:text-sky-400 transition ml-auto">Activate Theme</button>
+                                                                        <template x-if="id === 'manage_plugins'">
+                                                                            <button type="button" @click.prevent.stop="triggerPluginToggle(agent, key)" class="relative z-10 ml-auto cursor-pointer text-[10px] px-3 py-1.5 rounded bg-slate-800 border border-slate-700 hover:border-amber-500 hover:text-amber-400 transition" x-text="props.active ? 'Deactivate' : 'Activate'"></button>
+                                                                        </template>
+                                                                        <template x-if="id === 'manage_themes' && !props.active">
+                                                                            <button type="button" @click.prevent.stop="triggerThemeActivate(agent, key)" class="relative z-10 ml-auto cursor-pointer text-[10px] px-3 py-1.5 rounded bg-slate-800 border border-slate-700 hover:border-sky-500 hover:text-sky-400 transition">Activate Theme</button>
+                                                                        </template>
                                                                     </td>
                                                                 </tr>
                                                             </template>
@@ -493,7 +497,7 @@ if ($file_age > $expiration_time) {
                                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-2 p-3 bg-slate-900">
                                                     <template x-for="(v, k) in finding.data" :key="k">
                                                         <div class="flex items-center justify-between py-2 border-b border-slate-700/50 last:border-0 hover:bg-slate-800/30 transition px-2 -mx-2 rounded">
-                                                            <dt class="font-bold text-slate-300 uppercase tracking-widest text-[10px]" x-text="k.replace(/_/g, ' ')"></dt>
+                                                            <div class="font-bold text-slate-300 uppercase tracking-widest text-[10px]" x-text="k.replace(/_/g, ' ')"></div>
                                                             
                                                             <!-- Simple value rendering -->
                                                             <template x-if="typeof v !== 'object'">
@@ -503,12 +507,24 @@ if ($file_age > $expiration_time) {
                                                                     <!-- God Mode Controls -->
                                                                     <template x-if="agent === 'CoreOperationsAgent'">
                                                                         <div class="flex items-center gap-2">
-                                                                            <button x-show="k === 'WP_DEBUG'" @click="attemptFix(agent, 'toggle_wp_debug')" class="px-2 py-1 bg-amber-600/20 text-amber-400 border border-amber-600/50 rounded text-[9px] uppercase font-bold hover:bg-amber-600 hover:text-white transition">Toggle</button>
-                                                                            <button x-show="k === 'SAVEQUERIES'" @click="attemptFix(agent, 'toggle_savequeries')" class="px-2 py-1 bg-amber-600/20 text-amber-400 border border-amber-600/50 rounded text-[9px] uppercase font-bold hover:bg-amber-600 hover:text-white transition">Toggle</button>
-                                                                            <button x-show="k === 'maintenance_mode'" @click="attemptFix(agent, 'toggle_maintenance')" class="px-2 py-1 bg-amber-600/20 text-amber-400 border border-amber-600/50 rounded text-[9px] uppercase font-bold hover:bg-amber-600 hover:text-white transition">Toggle</button>
-                                                                            <button x-show="k === 'cache_clear'" @click="attemptFix(agent, 'clear_cache')" class="px-2 py-1 bg-sky-600/20 text-sky-400 border border-sky-600/50 rounded text-[9px] uppercase font-bold hover:bg-sky-600 hover:text-white transition" x-text="'Flush Cache'"></button>
-                                                                            <button x-show="k === 'password_reset'" @click="attemptFix(agent, 'reset_admin:admin')" class="px-2 py-1 bg-rose-600/20 text-rose-400 border border-rose-600/50 rounded text-[9px] uppercase font-bold hover:bg-rose-600 hover:text-white transition" x-text="'Reset admin'"></button>
-                                                                            <button x-show="k === 'core_update' && v !== 'unavailable'" @click="attemptFix(agent, 'core_update')" class="px-2 py-1 bg-emerald-600/20 text-emerald-400 border border-emerald-600/50 rounded text-[9px] uppercase font-bold hover:bg-emerald-600 hover:text-white transition" x-text="'Force Update'"></button>
+                                                                            <template x-if="k === 'WP_DEBUG'">
+                                                                                <button type="button" @click.prevent.stop="triggerCoreAction(agent, 'toggle_wp_debug')" class="relative z-10 cursor-pointer px-2 py-1 bg-amber-600/20 text-amber-400 border border-amber-600/50 rounded text-[9px] uppercase font-bold hover:bg-amber-600 hover:text-white transition">Toggle</button>
+                                                                            </template>
+                                                                            <template x-if="k === 'SAVEQUERIES'">
+                                                                                <button type="button" @click.prevent.stop="triggerCoreAction(agent, 'toggle_savequeries')" class="relative z-10 cursor-pointer px-2 py-1 bg-amber-600/20 text-amber-400 border border-amber-600/50 rounded text-[9px] uppercase font-bold hover:bg-amber-600 hover:text-white transition">Toggle</button>
+                                                                            </template>
+                                                                            <template x-if="k === 'maintenance_mode'">
+                                                                                <button type="button" @click.prevent.stop="triggerCoreAction(agent, 'toggle_maintenance')" class="relative z-10 cursor-pointer px-2 py-1 bg-amber-600/20 text-amber-400 border border-amber-600/50 rounded text-[9px] uppercase font-bold hover:bg-amber-600 hover:text-white transition">Toggle</button>
+                                                                            </template>
+                                                                            <template x-if="k === 'cache_clear'">
+                                                                                <button type="button" @click.prevent.stop="triggerCoreAction(agent, 'clear_cache')" class="relative z-10 cursor-pointer px-2 py-1 bg-sky-600/20 text-sky-400 border border-sky-600/50 rounded text-[9px] uppercase font-bold hover:bg-sky-600 hover:text-white transition">Flush Cache</button>
+                                                                            </template>
+                                                                            <template x-if="k === 'password_reset'">
+                                                                                <button type="button" @click.prevent.stop="triggerCoreAction(agent, 'reset_admin:admin')" class="relative z-10 cursor-pointer px-2 py-1 bg-rose-600/20 text-rose-400 border border-rose-600/50 rounded text-[9px] uppercase font-bold hover:bg-rose-600 hover:text-white transition">Reset admin</button>
+                                                                            </template>
+                                                                            <template x-if="k === 'core_update' && v !== 'unavailable'">
+                                                                                <button type="button" @click.prevent.stop="triggerCoreAction(agent, 'core_update')" class="relative z-10 cursor-pointer px-2 py-1 bg-emerald-600/20 text-emerald-400 border border-emerald-600/50 rounded text-[9px] uppercase font-bold hover:bg-emerald-600 hover:text-white transition">Force Update</button>
+                                                                            </template>
                                                                         </div>
                                                                     </template>
                                                                 </div>
@@ -519,7 +535,7 @@ if ($file_age > $expiration_time) {
                                                     <!-- Error Log explicitly added to operations -->
                                                     <div x-show="id==='god_mode_tools'" class="flex items-center justify-between p-2 rounded bg-slate-800/80 border border-slate-700 group hover:border-rose-500/50 transition">
                                                         <div class="text-xs font-mono font-bold text-rose-300">EMERGENCY_LOG</div>
-                                                        <button @click="showErrorLog(agent)" class="text-rose-400 hover:text-white px-2 py-0.5 rounded border border-rose-400/30 hover:bg-rose-500/20 text-[10px] uppercase font-bold text-center">View .log</button>
+                                                        <button type="button" @click.prevent.stop="showErrorLog(agent)" class="relative z-10 cursor-pointer text-rose-400 hover:text-white px-2 py-0.5 rounded border border-rose-400/30 hover:bg-rose-500/20 text-[10px] uppercase font-bold text-center">View .log</button>
                                                     </div>
                                                 </div>
                                             </template>
@@ -622,6 +638,15 @@ if ($file_age > $expiration_time) {
                         return keys.length > 0 ? keys.map(k => `${k}: ${finding[k]}`).join(' | ') : 'Compliance check passed.';
                     }
                     return JSON.stringify(finding);
+                },
+                triggerPluginToggle(agent, key) {
+                    return this.attemptFix(agent, 'toggle_plugin:' + key);
+                },
+                triggerThemeActivate(agent, key) {
+                    return this.attemptFix(agent, 'theme_activate:' + key);
+                },
+                triggerCoreAction(agent, actionId) {
+                    return this.attemptFix(agent, actionId);
                 },
                 async attemptFix(agent, id) {
                     if (!confirm(`Trigger Agentic Fix for [${id}]?`)) return;

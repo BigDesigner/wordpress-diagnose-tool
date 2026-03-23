@@ -1,4 +1,4 @@
-# WP Diagnose - Agentic Audit Report (v0.2.5-beta)
+# WP Diagnose - Agentic Audit Report (v0.2.6-beta)
 
 ## 1. Executive Summary
 The refactoring of the **wordpress-diagnose-tool** has successfully introduced a modular, Object-Oriented (OO) architecture. While the scalability for new health checks (Agents) has improved significantly, the shift from a monolithic script to a multi-file package has introduced critical regressions in **Emergency Portability** and **Security Cleanup**.
