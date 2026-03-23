@@ -4,7 +4,7 @@
          cacheDirectory=".phpunit.cache"
          beStrictAboutOutputDuringTests="true">
     <testsuites>
-        <testsuite name="WP Diagnose Unit">
+        <testsuite name="WordPress Diagnose Tool Unit">
             <directory>tests/Unit</directory>
         </testsuite>
     </testsuites>

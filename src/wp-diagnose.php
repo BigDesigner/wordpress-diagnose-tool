@@ -1,6 +1,6 @@
 <?php
 /**
- * WP Diagnose - Single File, EN/TR, Full & DB Mode
+ * WordPress Diagnose Tool - Single File, EN/TR, Full & DB Mode
  * A drop-in diagnosis, maintenance, and plugin management tool for WordPress.
  * Upload to root directory as `wp-diagnose.php` - use it - then delete it.
  *
@@ -46,7 +46,7 @@ if (defined('WP_CLI') && WP_CLI) {
             return;
         }
 
-        \WP_CLI::line(\WP_CLI::colorize('%BStarting WP Diagnose Agentic Engine...%n'));
+        \WP_CLI::line(\WP_CLI::colorize('%BStarting WordPress Diagnose Tool Engine...%n'));
         $reports = $engine->getReports();
         foreach ($reports as $agentName => $data) {
             \WP_CLI::success("Report: {$agentName}");
@@ -311,7 +311,7 @@ if ($file_age > $expiration_time) {
     wpd_log_action('AUTO_DESTRUCT', 'TTL exceeded 60 minutes. Initiating self-destruct.');
     if (\WPDiagnose\Core\Cleanup::fullWipe()) {
         header('Content-Type: text/html; charset=utf-8');
-        exit('<div style="background:#000;color:#00b84f;padding:20px;text-align:center;">WP Diagnose and all helper modules were removed for security.</div>');
+        exit('<div style="background:#000;color:#00b84f;padding:20px;text-align:center;">WordPress Diagnose Tool and all helper modules were removed for security.</div>');
     } else {
         header('Content-Type: text/html; charset=utf-8');
         exit('<div style="background:#000;color:#ef4444;padding:20px;text-align:center;">Warning: Files could not be removed automatically. Please delete them manually for security.</div>');
@@ -330,7 +330,7 @@ if ($file_age > $expiration_time) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WP Diagnose PRO <?php echo \WPDiagnose\Core\Version::label(); ?></title>
+    <title>WordPress Diagnose Tool <?php echo \WPDiagnose\Core\Version::label(); ?></title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <style>
@@ -404,7 +404,7 @@ if ($file_age > $expiration_time) {
             <div>
                 <h1 class="text-3xl font-black text-emerald-500 flex items-center gap-3">
                     <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
-                    WP DIAGNOSE <span class="text-sm font-mono bg-slate-800 text-slate-400 px-3 py-1 rounded-full"><?php echo \WPDiagnose\Core\Version::label(); ?></span>
+                    WORDPRESS DIAGNOSE TOOL <span class="text-sm font-mono bg-slate-800 text-slate-400 px-3 py-1 rounded-full"><?php echo \WPDiagnose\Core\Version::label(); ?></span>
                 </h1>
                 <p class="text-slate-500 text-xs mt-1 font-mono uppercase tracking-widest">Advanced Diagnostic Agents Swarm</p>
             </div>
@@ -506,7 +506,7 @@ if ($file_age > $expiration_time) {
                 <template x-for="(report, agent) in reports" :key="agent">
                     <div x-show="isAgentVisible(agent)" class="bg-slate-800 border border-slate-700/50 rounded-xl shadow-2xl overflow-hidden flex flex-col hover:border-slate-600 transition">
                         <div class="px-6 py-4 bg-slate-800/80 border-t border-slate-700/60 flex justify-between items-center text-xs text-slate-400">
-                            <span class="font-mono">WP Diagnose PRO <?php echo \WPDiagnose\Core\Version::label(); ?></span>
+                            <span class="font-mono">WordPress Diagnose Tool <?php echo \WPDiagnose\Core\Version::label(); ?></span>
                             <div class="flex items-center gap-3">
                                 <div class="w-2 h-2 rounded-full bg-emerald-500"></div>
                                 <div class="text-right">
@@ -741,7 +741,7 @@ if ($file_age > $expiration_time) {
 
         <!-- Footer -->
         <footer class="max-w-6xl mx-auto mt-20 pt-10 border-t border-slate-700/50 text-center mb-10">
-            <p class="text-slate-600 text-[10px] font-mono uppercase tracking-[0.2em]">WP Diagnose Agentic Swarm <?php echo \WPDiagnose\Core\Version::label(); ?> &copy; 2026. Built by BigDesigner for GNNcyber.</p>
+                <p class="text-slate-600 text-[10px] font-mono uppercase tracking-[0.2em]">WordPress Diagnose Tool <?php echo \WPDiagnose\Core\Version::label(); ?> &copy; 2026. Built by BigDesigner for GNNcyber.</p>
             <div class="mt-4 flex justify-center">
                 <a
                     href="https://github.com/BigDesigner/wordpress-diagnose-tool"
@@ -893,7 +893,7 @@ if ($file_age > $expiration_time) {
                         const contentType = response.headers.get('Content-Type') || '';
                         if (!contentType.includes('application/json')) {
                             const raw = await response.text();
-                            console.error('[WP Diagnose] Non-JSON response from API:', raw.substring(0, 500));
+                            console.error('[WordPress Diagnose Tool] Non-JSON response from API:', raw.substring(0, 500));
                             this.notify('API connection error: server did not return JSON.', 'error');
                             this.reports = {};
                         } else {
@@ -906,13 +906,13 @@ if ($file_age > $expiration_time) {
                                     this.reports = {};
                                 }
                             } catch (parseErr) {
-                                console.error('[WP Diagnose] JSON Parse failed:', parseErr);
+                        console.error('[WordPress Diagnose Tool] JSON Parse failed:', parseErr);
                                 this.notify('API connection error: response JSON could not be parsed.', 'error');
                                 this.reports = {};
                             }
                         }
                     } catch (e) {
-                        console.error('[WP Diagnose] Network error:', e);
+                    console.error('[WordPress Diagnose Tool] Network error:', e);
                         this.notify('API connection error: server is unreachable or the connection was interrupted.', 'error');
                         this.reports = {};
                     }
@@ -1040,7 +1040,7 @@ if ($file_age > $expiration_time) {
                         try {
                             result = JSON.parse(raw);
                         } catch (parseError) {
-                            console.error('[WP Diagnose] Non-JSON action response:', raw.substring(0, 500));
+                            console.error('[WordPress Diagnose Tool] Non-JSON action response:', raw.substring(0, 500));
                             this.notify('Action API did not return valid JSON.', 'error');
                             await this.fetchReport();
                             return false;

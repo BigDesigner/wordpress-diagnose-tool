@@ -3,7 +3,7 @@ declare(strict_types = 1)
 ;
 
 /**
- * WP Diagnose - Atomic Bracketed Namespace Bundler
+ * WordPress Diagnose Tool - Atomic Bracketed Namespace Bundler
  *
  * Strategy: Convert every module to bracketed namespace { } syntax.
  * This is the ONLY way to have multiple namespaces coexist in one PHP file.
@@ -86,7 +86,7 @@ function wrapNamespace(string $code, string $namespace): string
 $bundle = "<?php" . PHP_EOL;
 $bundle .= "declare(strict_types=1);" . PHP_EOL;
 $bundle .= "/**" . PHP_EOL;
-$bundle .= " * WP DIAGNOSE PRO - Bundled Agentic Toolkit" . PHP_EOL;
+$bundle .= " * WORDPRESS DIAGNOSE TOOL - Bundled Agentic Toolkit" . PHP_EOL;
 $bundle .= " * Version : $version" . PHP_EOL;
 $bundle .= " * Standard: Bracketed Namespace (Constitution v{$version})" . PHP_EOL;
 $bundle .= " * Built   : " . gmdate('Y-m-d H:i:s') . " UTC" . PHP_EOL;

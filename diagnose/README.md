@@ -1,4 +1,4 @@
-# WP Diagnose PRO - Distribution Quick Start
+# WordPress Diagnose Tool - Distribution Quick Start
 
 This directory contains the production-ready distribution assets.
 

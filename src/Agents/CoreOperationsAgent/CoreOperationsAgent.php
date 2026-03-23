@@ -756,7 +756,7 @@ class CoreOperationsAgent implements DiagnosticInterface
             return false;
         }
 
-        $marker = '[' . gmdate('c') . '] WP Diagnose debug log bootstrap marker' . PHP_EOL;
+        $marker = '[' . gmdate('c') . '] WordPress Diagnose Tool debug log bootstrap marker' . PHP_EOL;
         $written = @file_put_contents($debugLogPath, $marker, FILE_APPEND | LOCK_EX);
         if ($written === false) {
             @error_log(trim($marker), 3, $debugLogPath);

@@ -64,9 +64,9 @@ if (!function_exists('syncProjectVersion')) {
             'README.md' => [
                 [
                     'patterns' => [
-                        '/^# WP Diagnose PRO \(v[^)\r\n]+\)\r?$/m',
+                        '/^# WordPress Diagnose Tool \(v[^)\r\n]+\)\r?$/m',
                     ],
-                    'replacement' => "# WP Diagnose PRO (v{$version})",
+                    'replacement' => "# WordPress Diagnose Tool (v{$version})",
                 ],
                 [
                     'patterns' => [
@@ -79,23 +79,23 @@ if (!function_exists('syncProjectVersion')) {
             'docs/AUDIT_REPORT.md' => [
                 [
                     'patterns' => [
-                        '/^# WP Diagnose - Agentic Audit Report \(v[^)\r\n]+\)\r?$/m',
+                        '/^# WordPress Diagnose Tool - Audit Report \(v[^)\r\n]+\)\r?$/m',
                     ],
-                    'replacement' => "# WP Diagnose - Agentic Audit Report (v{$version})",
+                    'replacement' => "# WordPress Diagnose Tool - Audit Report (v{$version})",
                 ],
             ],
             'specs/CONSTITUTION.md' => [
                 [
                     'patterns' => [
-                        '/^# WP Diagnose PRO - Standard Constitution \(v[^)\r\n]+\)\r?$/m',
+                        '/^# WordPress Diagnose Tool - Standard Constitution \(v[^)\r\n]+\)\r?$/m',
                     ],
-                    'replacement' => "# WP Diagnose PRO - Standard Constitution (v{$version})",
+                    'replacement' => "# WordPress Diagnose Tool - Standard Constitution (v{$version})",
                 ],
                 [
                     'patterns' => [
-                        '/^\s*As of version [^ ]+-PRO,/m',
+                        '/^\s*As of version [^,]+,/m',
                     ],
-                    'replacement' => "As of version {$version}-PRO,",
+                    'replacement' => "As of version {$version},",
                 ],
             ],
         ];

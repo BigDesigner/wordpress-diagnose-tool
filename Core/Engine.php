@@ -72,11 +72,11 @@ class Engine
      */
     public function performFix(string $agentName, string $fixId): array
     {
-        error_log("[WP Diagnose Engine] performAction POST Payload: " . print_r($_POST, true));
-        error_log("[WP Diagnose Engine] performAction triggered - Agent: {$agentName}, ActionType: {$fixId}");
+        error_log("[WordPress Diagnose Tool Engine] performAction POST Payload: " . print_r($_POST, true));
+        error_log("[WordPress Diagnose Tool Engine] performAction triggered - Agent: {$agentName}, ActionType: {$fixId}");
         
         if (!isset($this->agents[$agentName])) {
-            error_log("[WP Diagnose Engine] WARNING: Agent {$agentName} not registered.");
+            error_log("[WordPress Diagnose Tool Engine] WARNING: Agent {$agentName} not registered.");
             return [
                 'success' => false,
                 'message' => "Agent not registered: {$agentName}",
@@ -99,10 +99,10 @@ class Engine
                 }
             }
 
-            error_log("[WP Diagnose Engine] Action {$fixId} on {$agentName} returning " . ($response['success'] ? 'TRUE' : 'FALSE'));
+            error_log("[WordPress Diagnose Tool Engine] Action {$fixId} on {$agentName} returning " . ($response['success'] ? 'TRUE' : 'FALSE'));
             return $response;
         } catch (\Throwable $e) {
-            error_log("[WP Diagnose Engine] ERROR during action {$fixId} on {$agentName}: " . $e->getMessage());
+            error_log("[WordPress Diagnose Tool Engine] ERROR during action {$fixId} on {$agentName}: " . $e->getMessage());
             return [
                 'success' => false,
                 'message' => 'Action crashed: ' . $e->getMessage(),

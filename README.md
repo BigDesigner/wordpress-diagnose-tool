@@ -1,6 +1,6 @@
-# WP Diagnose PRO (v0.3.1-beta)
+# WordPress Diagnose Tool (v0.3.1-beta)
 
-**WP Diagnose PRO** is an emergency-ready WordPress diagnostics and recovery toolkit built for real-world outage, compromise, and maintenance scenarios. It ships as a modular PHP codebase for development and as a production bundle for fast drop-in deployment on live sites.
+**WordPress Diagnose Tool** is an emergency-ready WordPress diagnostics and recovery toolkit built for real-world outage, compromise, and maintenance scenarios. It ships as a modular PHP codebase for development and as a production bundle for fast drop-in deployment on live sites.
 
 ## Key Features (v0.3.1-beta)
 - **Agent-driven diagnostics** for server health, bootstrap recovery, WordPress state, database health, core integrity, asset management, threat intelligence, malware signals, and emergency operations.

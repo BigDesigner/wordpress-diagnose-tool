@@ -1,7 +1,7 @@
-# Deployment Guide - WP Diagnose PRO
+# Deployment Guide - WordPress Diagnose Tool
 
 ## Overview
-WP Diagnose PRO is developed as a modular PHP application and deployed as a production-ready bundle. The source tree is intended for development, while the generated distribution is intended for emergency upload to a live WordPress installation.
+WordPress Diagnose Tool is developed as a modular PHP application and deployed as a production-ready bundle. The source tree is intended for development, while the generated distribution is intended for emergency upload to a live WordPress installation.
 
 ## Source Layout
 - `Core/`: orchestration, security, versioning, and cleanup primitives.

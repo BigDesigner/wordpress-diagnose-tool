@@ -1,7 +1,7 @@
-# WP Diagnose PRO - Audit Report (v0.3.1-beta)
+# WordPress Diagnose Tool - Audit Report (v0.3.1-beta)
 
 ## Executive Summary
-WP Diagnose PRO has moved beyond the original refactor risks that existed during the early modularization phase. The current codebase provides a working modular architecture, a production bundler, centralized security controls, independent mode diagnostics, and a modern dashboard suitable for incident response workflows.
+WordPress Diagnose Tool has moved beyond the original refactor risks that existed during the early modularization phase. The current codebase provides a working modular architecture, a production bundler, centralized security controls, independent mode diagnostics, and a modern dashboard suitable for incident response workflows.
 
 The main audit conclusion for `v0.3.1-beta` is:
 - the original portability gap is resolved through the production bundle
