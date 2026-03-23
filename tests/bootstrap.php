@@ -16,6 +16,8 @@ require_once $projectRoot . '/src/Agents/DBHealth/DBHealth.php';
 require_once $projectRoot . '/src/Agents/CoreIntegrityAgent/CoreIntegrityAgent.php';
 require_once $projectRoot . '/src/Agents/AssetManagerAgent/AssetManagerAgent.php';
 require_once $projectRoot . '/src/Agents/CoreOperationsAgent/CoreOperationsAgent.php';
+require_once $projectRoot . '/src/Agents/ThreatIntelAgent/ThreatIntelAgent.php';
+require_once $projectRoot . '/src/Agents/MalwareInspector/MalwareInspector.php';
 
 if (!defined('WPD_TEST_ROOT')) {
     define('WPD_TEST_ROOT', sys_get_temp_dir() . '/wp-diagnose-tests-root/');

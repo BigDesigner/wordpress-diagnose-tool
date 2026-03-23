@@ -35,6 +35,8 @@ $coreModules = [
     'src/Agents/CoreIntegrityAgent/CoreIntegrityAgent.php',
     'src/Agents/AssetManagerAgent/AssetManagerAgent.php',
     'src/Agents/CoreOperationsAgent/CoreOperationsAgent.php',
+    'src/Agents/ThreatIntelAgent/ThreatIntelAgent.php',
+    'src/Agents/MalwareInspector/MalwareInspector.php',
 ];
 
 // Procedural entry point

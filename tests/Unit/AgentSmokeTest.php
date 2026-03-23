@@ -7,8 +7,10 @@ use WPDiagnose\Agents\BootstrapInspector\BootstrapInspector;
 use WPDiagnose\Agents\CoreIntegrityAgent\CoreIntegrityAgent;
 use WPDiagnose\Agents\CoreOperationsAgent\CoreOperationsAgent;
 use WPDiagnose\Agents\DBHealth\DBHealth;
+use WPDiagnose\Agents\MalwareInspector\MalwareInspector;
 use WPDiagnose\Agents\SecurityInspector\SecurityInspector;
 use WPDiagnose\Agents\ServerInspector\ServerInspector;
+use WPDiagnose\Agents\ThreatIntelAgent\ThreatIntelAgent;
 use WPDiagnose\Agents\WPInspector\WPInspector;
 
 final class AgentSmokeTest extends TestCase
@@ -102,5 +104,63 @@ final class AgentSmokeTest extends TestCase
         self::assertStringContainsString("define('WP_DEBUG', true);", $config);
         self::assertStringContainsString("define('WP_DEBUG_DISPLAY', false);", $config);
         self::assertStringContainsString("define('WP_DEBUG_LOG', '" . WPD_TEST_ROOT . "wp-content/wp-diagnose-tool.log');", $config);
+    }
+
+    public function testThreatIntelAgentWarnsWhenWordfenceApiKeyIsMissing(): void
+    {
+        putenv('WPD_WORDFENCE_API_KEY');
+        wpd_tests_write('wp-includes/version.php', "<?php\n\$wp_version = '6.8.1';\n");
+        wpd_tests_write('wp-content/plugins/sample-plugin/sample-plugin.php', "<?php\n/*\nPlugin Name: Sample Plugin\nVersion: 1.2.3\n*/\n");
+        wpd_tests_write('wp-content/themes/sample-theme/style.css', "/*\nTheme Name: Sample Theme\nVersion: 2.0.0\n*/\n");
+
+        $report = (new ThreatIntelAgent(false))->check();
+
+        self::assertArrayHasKey('feed_status', $report);
+        self::assertSame('WARN', $report['feed_status']['status']);
+        self::assertArrayHasKey('inventory_summary', $report);
+    }
+
+    public function testThreatIntelAgentCanPersistApiKeyViaFallbackDatabase(): void
+    {
+        $fakeDb = new class {
+            public array $options = [];
+
+            public function get_option(string $name)
+            {
+                return $this->options[$name] ?? null;
+            }
+
+            public function update_option(string $name, string $value): bool
+            {
+                $this->options[$name] = $value;
+                return true;
+            }
+        };
+
+        $GLOBALS['DB'] = $fakeDb;
+        $_POST['wordfence_api_key'] = 'wf_test_key_123456';
+
+        try {
+            $agent = new ThreatIntelAgent(false);
+            $saved = $agent->fix('save_wordfence_api_key');
+
+            self::assertTrue($saved);
+            self::assertSame('wf_test_key_123456', $fakeDb->options['wpd_wordfence_api_key']);
+            self::assertTrue(method_exists($agent, 'getLastActionResult'));
+        } finally {
+            unset($GLOBALS['DB'], $_POST['wordfence_api_key']);
+        }
+    }
+
+    public function testMalwareInspectorFlagsUploadsPhpAndUnexpectedRootPhp(): void
+    {
+        wpd_tests_write('wp-content/uploads/2026/03/u5.php', "<?php echo 'shell';");
+        wpd_tests_write('wp7.php', "<?php echo 'root shell';");
+
+        $report = (new MalwareInspector())->check();
+
+        self::assertSame('ERROR', $report['malware_summary']['status']);
+        self::assertContains('wp-content/uploads/2026/03/u5.php', $report['php_in_uploads']['data']);
+        self::assertContains('wp7.php', $report['unexpected_root_php']['data']);
     }
 }

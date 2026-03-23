@@ -20,6 +20,8 @@ require_once __DIR__ . '/Agents/DBHealth/DBHealth.php';
 require_once __DIR__ . '/Agents/CoreIntegrityAgent/CoreIntegrityAgent.php';
 require_once __DIR__ . '/Agents/AssetManagerAgent/AssetManagerAgent.php';
 require_once __DIR__ . '/Agents/CoreOperationsAgent/CoreOperationsAgent.php';
+require_once __DIR__ . '/Agents/ThreatIntelAgent/ThreatIntelAgent.php';
+require_once __DIR__ . '/Agents/MalwareInspector/MalwareInspector.php';
 
 // -------------------- WP-CLI INTEGRATION --------------------
 if (defined('WP_CLI') && WP_CLI) {
@@ -33,6 +35,8 @@ if (defined('WP_CLI') && WP_CLI) {
         $engine->registerAgent(new \WPDiagnose\Agents\CoreIntegrityAgent\CoreIntegrityAgent(true));
         $engine->registerAgent(new \WPDiagnose\Agents\AssetManagerAgent\AssetManagerAgent(true));
         $engine->registerAgent(new \WPDiagnose\Agents\CoreOperationsAgent\CoreOperationsAgent(true));
+        $engine->registerAgent(new \WPDiagnose\Agents\ThreatIntelAgent\ThreatIntelAgent(true));
+        $engine->registerAgent(new \WPDiagnose\Agents\MalwareInspector\MalwareInspector());
 
         if (isset($assoc_args['fix'])) {
             $agent = $assoc_args['agent'] ?? 'ServerInspector';
@@ -234,6 +238,8 @@ if ($is_json || isset($_GET['action'])) {
         $engine->registerAgent(new \WPDiagnose\Agents\CoreIntegrityAgent\CoreIntegrityAgent($WP_LOADED));
         $engine->registerAgent(new \WPDiagnose\Agents\AssetManagerAgent\AssetManagerAgent($WP_LOADED));
         $engine->registerAgent(new \WPDiagnose\Agents\CoreOperationsAgent\CoreOperationsAgent($WP_LOADED));
+        $engine->registerAgent(new \WPDiagnose\Agents\ThreatIntelAgent\ThreatIntelAgent($WP_LOADED));
+        $engine->registerAgent(new \WPDiagnose\Agents\MalwareInspector\MalwareInspector());
 
         $response = ['success' => true, 'message' => '', 'data' => []];
 
@@ -477,6 +483,51 @@ if ($file_age > $expiration_time) {
                                     </div>
                                     
                                     <p class="text-sm text-slate-400 leading-relaxed mb-4" x-text="formatFound(finding)"></p>
+
+                                    <template x-if="agent === 'ThreatIntelAgent' && id === 'intel_configuration'">
+                                        <div class="mb-4 rounded-lg border border-slate-700 bg-slate-900/60 p-4 space-y-4">
+                                            <div class="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+                                                <div>
+                                                    <div class="text-xs font-bold uppercase tracking-[0.25em] text-emerald-400">Wordfence Intelligence</div>
+                                                    <div class="mt-1 text-xs text-slate-400">
+                                                        Free API key girersen live WordPress CVE feed aktif olur. Girilmezse bu alan pasif kalir.
+                                                    </div>
+                                                </div>
+                                                <a
+                                                    :href="finding.data.docs_url"
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    class="inline-flex items-center justify-center rounded border border-sky-500/40 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.2em] text-sky-300 hover:bg-sky-500/10"
+                                                >Get API Key</a>
+                                            </div>
+
+                                            <div class="grid gap-3 lg:grid-cols-[1fr_auto_auto]">
+                                                <input
+                                                    type="password"
+                                                    x-model="threatIntelApiKeyDraft"
+                                                    placeholder="Paste your Wordfence Intelligence API key"
+                                                    class="w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-emerald-500"
+                                                >
+                                                <button
+                                                    type="button"
+                                                    @click.prevent.stop="saveThreatIntelApiKey()"
+                                                    class="rounded border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-[10px] font-bold uppercase tracking-[0.2em] text-emerald-300 hover:bg-emerald-500/20"
+                                                >Save Key</button>
+                                                <button
+                                                    type="button"
+                                                    @click.prevent.stop="clearThreatIntelApiKey()"
+                                                    class="rounded border border-rose-500/40 bg-rose-500/10 px-4 py-2 text-[10px] font-bold uppercase tracking-[0.2em] text-rose-300 hover:bg-rose-500/20"
+                                                >Clear</button>
+                                            </div>
+
+                                            <div class="grid gap-2 text-[11px] text-slate-400 md:grid-cols-2">
+                                                <div>Provider: <span class="text-slate-200" x-text="finding.data.provider"></span></div>
+                                                <div>Key status: <span class="text-slate-200" x-text="finding.data.api_key_status"></span></div>
+                                                <div>Key source: <span class="text-slate-200" x-text="finding.data.api_key_source"></span></div>
+                                                <div>Saved key: <span class="text-slate-200" x-text="finding.data.api_key_hint"></span></div>
+                                            </div>
+                                        </div>
+                                    </template>
                                     
                                     <!-- Re-install Core Button for Watchdog -->
                                     <template x-if="(agent === 'CoreIntegrityAgent' && (id === 'mismatch_files' || id === 'missing_files')) && finding.status !== 'OK'">
@@ -540,7 +591,7 @@ if ($file_age > $expiration_time) {
                                             </template>
                                             
                                             <!-- Simple Key-Value Config / Toggles -->
-                                            <template x-if="!Array.isArray(finding.data) && typeof Object.values(finding.data)[0] === 'string'">
+                                            <template x-if="!Array.isArray(finding.data) && typeof Object.values(finding.data)[0] === 'string' && !(agent === 'ThreatIntelAgent' && id === 'intel_configuration')">
                                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-2 p-3 bg-slate-900">
                                                     <template x-for="(v, k) in finding.data" :key="k">
                                                         <div class="flex items-center justify-between py-2 border-b border-slate-700/50 last:border-0 hover:bg-slate-800/30 transition px-2 -mx-2 rounded">
@@ -618,6 +669,7 @@ if ($file_age > $expiration_time) {
                 reports: {},
                 activeTab: 'all',
                 token: new URLSearchParams(window.location.search).get('token') || '',
+                threatIntelApiKeyDraft: '',
                 notifications: [],
                 notificationSeed: 0,
                 confirmState: {
@@ -630,6 +682,12 @@ if ($file_age > $expiration_time) {
                 },
                 init() {
                     this.fetchReport();
+                },
+                hydrateThreatIntelState() {
+                    const config = this.reports?.ThreatIntelAgent?.intel_configuration?.data;
+                    if (!config || config.api_key_status !== 'configured') {
+                        this.threatIntelApiKeyDraft = '';
+                    }
                 },
                 notify(message, type = 'info', timeout = 4500) {
                     const id = ++this.notificationSeed;
@@ -682,6 +740,7 @@ if ($file_age > $expiration_time) {
                         } else {
                             try {
                                 this.reports = await response.json();
+                                this.hydrateThreatIntelState();
                                 if (this.reports.status === 'error' || (this.reports.success === false && this.reports.message)) {
                                     this.notify('API baglanti hatasi: ' + this.reports.message, 'error');
                                     this.reports = {};
@@ -744,8 +803,21 @@ if ($file_age > $expiration_time) {
                 triggerCoreAction(agent, actionId) {
                     return this.attemptFix(agent, actionId);
                 },
-                async attemptFix(agent, id) {
-                    const confirmed = await this.askConfirmation({
+                async saveThreatIntelApiKey() {
+                    return this.attemptFix('ThreatIntelAgent', 'save_wordfence_api_key', {
+                        wordfence_api_key: this.threatIntelApiKeyDraft
+                    }, {
+                        skipConfirm: true
+                    });
+                },
+                async clearThreatIntelApiKey() {
+                    return this.attemptFix('ThreatIntelAgent', 'clear_wordfence_api_key', {}, {
+                        skipConfirm: true
+                    });
+                },
+                async attemptFix(agent, id, params = {}, options = {}) {
+                    const skipConfirm = options.skipConfirm === true;
+                    const confirmed = skipConfirm ? true : await this.askConfirmation({
                         title: 'Trigger Agentic Fix',
                         body: `Apply recovery action [${id}] now?`,
                         confirmLabel: 'Run Fix',
@@ -762,6 +834,9 @@ if ($file_age > $expiration_time) {
                         const fd = new FormData();
                         fd.append('agent', agent);
                         fd.append('id', id);
+                        Object.entries(params).forEach(([key, value]) => {
+                            fd.append(key, value ?? '');
+                        });
 
                         if (id.startsWith('toggle_plugin:')) {
                             const slug = id.split(':')[1];
