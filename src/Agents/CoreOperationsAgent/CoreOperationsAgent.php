@@ -37,7 +37,10 @@ class CoreOperationsAgent implements DiagnosticInterface
             'status' => 'OK',
             'info'   => 'Current wp-config.php debug/env settings.',
             'data'   => [
-                'WP_DEBUG'    => $configVars['WP_DEBUG'] ?? 'false',
+                'WP_DEBUG' => $configVars['WP_DEBUG'] ?? 'false',
+                'WP_DEBUG_DISPLAY' => $configVars['WP_DEBUG_DISPLAY'] ?? 'false',
+                'WP_DEBUG_LOG' => $configVars['WP_DEBUG_LOG'] ?? 'false',
+                'DEBUG_LOG_FILE' => $this->resolveDebugLogPath(),
                 'SAVEQUERIES' => $configVars['SAVEQUERIES'] ?? 'false',
                 'WP_ENVIRONMENT_TYPE' => $configVars['WP_ENVIRONMENT_TYPE'] ?? 'production',
             ],
@@ -51,7 +54,8 @@ class CoreOperationsAgent implements DiagnosticInterface
                 'maintenance_mode' => is_file(ABSPATH . '.maintenance') ? 'active' : 'inactive',
                 'cache_clear'      => 'ready',
                 'password_reset'   => 'ready',
-                'core_update'      => $this->isWpLoaded ? 'ready' : 'unavailable',
+                'core_update'      => $this->getCurrentWordPressVersion() ? 'ready' : 'unavailable',
+                'debug_log_viewer' => is_file($this->resolveDebugLogPath()) ? 'ready' : 'waiting',
             ],
         ];
 
@@ -63,7 +67,7 @@ class CoreOperationsAgent implements DiagnosticInterface
         $this->lastActionResult = ['success' => false, 'message' => 'Unknown core operation.', 'data' => null];
 
         if ($id === 'toggle_wp_debug') {
-            return $this->toggleConfig('WP_DEBUG');
+            return $this->toggleWpDebugSuite();
         } elseif ($id === 'toggle_savequeries') {
             return $this->toggleConfig('SAVEQUERIES');
         } elseif ($id === 'toggle_maintenance') {
@@ -71,7 +75,7 @@ class CoreOperationsAgent implements DiagnosticInterface
         } elseif ($id === 'clear_cache') {
             return $this->clearCache();
         } elseif ($id === 'core_update' || $id === 'reinstall_core') {
-            return $this->updateCore();
+            return $this->updateCore($id === 'reinstall_core');
         } elseif ($id === 'view_error_log') {
             $this->outputErrorLog();
             return true;
@@ -104,6 +108,14 @@ class CoreOperationsAgent implements DiagnosticInterface
         if (preg_match("/define\(\s*['\"]WP_DEBUG['\"]\s*,\s*(true|false)\s*\)/i", $content, $matches)) {
             $vars['WP_DEBUG'] = strtolower($matches[1]);
         }
+        if (preg_match("/define\(\s*['\"]WP_DEBUG_DISPLAY['\"]\s*,\s*(true|false)\s*\)/i", $content, $matches)) {
+            $vars['WP_DEBUG_DISPLAY'] = strtolower($matches[1]);
+        }
+        if (preg_match("/define\(\s*['\"]WP_DEBUG_LOG['\"]\s*,\s*(true|false)\s*\)/i", $content, $matches)) {
+            $vars['WP_DEBUG_LOG'] = strtolower($matches[1]);
+        } elseif (preg_match("/define\(\s*['\"]WP_DEBUG_LOG['\"]\s*,\s*['\"]([^'\"]+)['\"]\s*\)/i", $content, $matches)) {
+            $vars['WP_DEBUG_LOG'] = $matches[1];
+        }
         if (preg_match("/define\(\s*['\"]SAVEQUERIES['\"]\s*,\s*(true|false)\s*\)/i", $content, $matches)) {
             $vars['SAVEQUERIES'] = strtolower($matches[1]);
         }
@@ -111,6 +123,79 @@ class CoreOperationsAgent implements DiagnosticInterface
             $vars['WP_ENVIRONMENT_TYPE'] = $matches[1];
         }
         return $vars;
+    }
+
+    private function toggleWpDebugSuite(): bool
+    {
+        $configPath = $this->locateWpConfigPath();
+        if (!is_file($configPath) || !is_writable($configPath)) {
+            $this->lastActionResult = [
+                'success' => false,
+                'message' => 'Config file is not writable for WP_DEBUG.',
+                'data' => null,
+            ];
+            return false;
+        }
+
+        $content = file_get_contents($configPath);
+        $currentDebug = 'false';
+        if (preg_match("/define\(\s*['\"]WP_DEBUG['\"]\s*,\s*(true|false)\s*\)/i", $content, $matches)) {
+            $currentDebug = strtolower($matches[1]);
+        }
+
+        $newDebug = $currentDebug === 'true' ? 'false' : 'true';
+        $debugLogPath = $this->resolveDebugLogPath();
+
+        $updated = false;
+        $updated = $this->upsertConfigConstant($content, 'WP_DEBUG', $newDebug) || $updated;
+        $updated = $this->upsertConfigConstant($content, 'WP_DEBUG_DISPLAY', 'false') || $updated;
+        $updated = $this->upsertConfigConstant($content, 'WP_DEBUG_LOG', "'" . addslashes($debugLogPath) . "'") || $updated;
+
+        if (!$updated) {
+            $this->lastActionResult = [
+                'success' => false,
+                'message' => 'Failed to update WP_DEBUG settings in wp-config.php.',
+                'data' => null,
+            ];
+            return false;
+        }
+
+        $written = file_put_contents($configPath, $content) !== false;
+        $this->lastActionResult = [
+            'success' => $written,
+            'message' => $written
+                ? ($newDebug === 'true'
+                    ? "WP_DEBUG enabled. Logs will be written to {$debugLogPath} with display disabled."
+                    : 'WP_DEBUG disabled. Display remains off and log target is preserved.')
+                : 'Failed to write updated WP_DEBUG settings to wp-config.php.',
+            'data' => $written ? [
+                'WP_DEBUG' => $newDebug,
+                'WP_DEBUG_DISPLAY' => 'false',
+                'WP_DEBUG_LOG' => $debugLogPath,
+            ] : null,
+        ];
+        return $written;
+    }
+
+    private function upsertConfigConstant(string &$content, string $constant, string $valueExpression): bool
+    {
+        $pattern = "/define\(\s*['\"]" . preg_quote($constant, '/') . "['\"]\s*,\s*([^)]+)\)\s*;/i";
+        $replacement = "define('{$constant}', {$valueExpression});";
+
+        $replacements = 0;
+        $content = preg_replace($pattern, $replacement, $content, 1, $replacements);
+        if ($replacements > 0) {
+            return true;
+        }
+
+        $insert = $replacement . "\n";
+        if (strpos($content, "/* That's all, stop editing!") !== false) {
+            $content = str_replace("/* That's all, stop editing!", $insert . "/* That's all, stop editing!", $content, $count);
+            return $count > 0;
+        }
+
+        $content = preg_replace('/(<\?php)/i', "$1\n" . $insert, $content, 1, $count);
+        return $count > 0;
     }
 
     private function toggleConfig(string $constant): bool
@@ -235,17 +320,33 @@ class CoreOperationsAgent implements DiagnosticInterface
         return true;
     }
 
-    private function updateCore(): bool
+    private function updateCore(bool $forceReinstall = false): bool
     {
-        if (!$this->isWpLoaded) {
+        $version = $this->getCurrentWordPressVersion();
+        if (!$version) {
             $this->lastActionResult = [
                 'success' => false,
-                'message' => 'Core update requires a fully loaded WordPress environment.',
+                'message' => 'Unable to determine the installed WordPress version for repair.',
                 'data' => null,
             ];
             return false;
         }
 
+        if ($this->isWpLoaded && !$forceReinstall) {
+            $nativeResult = $this->runNativeCoreUpdate();
+            if ($nativeResult['success']) {
+                $this->lastActionResult = $nativeResult;
+                return true;
+            }
+        }
+
+        $repairResult = $this->repairCoreFromPackage($version);
+        $this->lastActionResult = $repairResult;
+        return $repairResult['success'];
+    }
+
+    private function runNativeCoreUpdate(): array
+    {
         $requiredFiles = [
             ABSPATH . 'wp-admin/includes/class-wp-upgrader.php',
             ABSPATH . 'wp-admin/includes/file.php',
@@ -255,24 +356,22 @@ class CoreOperationsAgent implements DiagnosticInterface
 
         foreach ($requiredFiles as $requiredFile) {
             if (!is_file($requiredFile)) {
-                $this->lastActionResult = [
+                return [
                     'success' => false,
                     'message' => 'Required updater dependency is missing: ' . basename($requiredFile),
                     'data' => null,
                 ];
-                return false;
             }
 
             require_once $requiredFile;
         }
 
         if (!function_exists('get_core_updates')) {
-            $this->lastActionResult = [
+            return [
                 'success' => false,
                 'message' => 'WordPress updater APIs are unavailable.',
                 'data' => null,
             ];
-            return false;
         }
 
         ob_start();
@@ -280,10 +379,10 @@ class CoreOperationsAgent implements DiagnosticInterface
         $updates = get_core_updates(['dismissed' => false]);
         $target = $updates[0] ?? null;
 
-        if ($target && $target->response === 'latest') {
-            if (function_exists('find_core_update')) {
-                $found = find_core_update($target->current, $target->locale);
-                if ($found) $target = $found;
+        if ($target && $target->response === 'latest' && function_exists('find_core_update')) {
+            $found = find_core_update($target->current, $target->locale);
+            if ($found) {
+                $target = $found;
             }
         }
 
@@ -293,13 +392,219 @@ class CoreOperationsAgent implements DiagnosticInterface
         }
         ob_end_clean();
 
-        $success = !is_wp_error($result) && $result;
-        $this->lastActionResult = [
+        $success = !is_wp_error($result) && (bool) $result;
+        return [
             'success' => $success,
-            'message' => $success ? 'WordPress core update completed.' : 'WordPress core update failed or no update was available.',
+            'message' => $success
+                ? 'WordPress core update completed via native updater.'
+                : 'Native core update was unavailable or failed. Falling back to package repair.',
             'data' => null,
         ];
-        return $success;
+    }
+
+    private function repairCoreFromPackage(string $version): array
+    {
+        $workingDir = $this->createTempDirectory();
+
+        try {
+            $sourceDir = $this->downloadAndExtractWordPress($version, $workingDir);
+            $copied = $this->syncCoreFiles($sourceDir, ABSPATH);
+
+            return [
+                'success' => $copied > 0,
+                'message' => $copied > 0
+                    ? "WordPress core files reinstalled from package {$version}. ({$copied} file(s) refreshed)"
+                    : 'Core repair package was downloaded, but no files were refreshed.',
+                'data' => [
+                    'version' => $version,
+                    'files_refreshed' => $copied,
+                ],
+            ];
+        } catch (\Throwable $e) {
+            return [
+                'success' => false,
+                'message' => 'Core repair failed: ' . $e->getMessage(),
+                'data' => ['version' => $version],
+            ];
+        } finally {
+            $this->removeDirectory($workingDir);
+        }
+    }
+
+    private function downloadAndExtractWordPress(string $version, string $workingDir): string
+    {
+        if (class_exists(\ZipArchive::class)) {
+            $zipUrl = "https://wordpress.org/wordpress-{$version}.zip";
+            $zipPath = $workingDir . '/wordpress.zip';
+            $this->downloadFile($zipUrl, $zipPath);
+
+            $zip = new \ZipArchive();
+            if ($zip->open($zipPath) !== true) {
+                throw new \RuntimeException('Unable to open downloaded WordPress zip archive.');
+            }
+
+            if (!$zip->extractTo($workingDir)) {
+                $zip->close();
+                throw new \RuntimeException('Unable to extract downloaded WordPress zip archive.');
+            }
+
+            $zip->close();
+        } elseif (class_exists(\PharData::class)) {
+            $tarGzUrl = "https://wordpress.org/wordpress-{$version}.tar.gz";
+            $tarGzPath = $workingDir . '/wordpress.tar.gz';
+            $this->downloadFile($tarGzUrl, $tarGzPath);
+
+            $tarPath = $workingDir . '/wordpress.tar';
+            if (is_file($tarPath)) {
+                @unlink($tarPath);
+            }
+
+            $archive = new \PharData($tarGzPath);
+            $archive->decompress();
+
+            $tar = new \PharData($tarPath);
+            $tar->extractTo($workingDir, null, true);
+        } else {
+            throw new \RuntimeException('Neither ZipArchive nor PharData is available for package extraction.');
+        }
+
+        $sourceDir = $workingDir . '/wordpress';
+        if (!is_dir($sourceDir)) {
+            throw new \RuntimeException('Extracted WordPress package directory was not found.');
+        }
+
+        return $sourceDir;
+    }
+
+    private function downloadFile(string $url, string $destination): void
+    {
+        if ($this->isWpLoaded && function_exists('download_url')) {
+            $tmpFile = download_url($url, 30);
+            if (is_wp_error($tmpFile)) {
+                throw new \RuntimeException($tmpFile->get_error_message());
+            }
+
+            if (!@rename($tmpFile, $destination)) {
+                if (!@copy($tmpFile, $destination)) {
+                    @unlink($tmpFile);
+                    throw new \RuntimeException('Unable to move downloaded WordPress package into place.');
+                }
+                @unlink($tmpFile);
+            }
+            return;
+        }
+
+        if (function_exists('curl_init')) {
+            $handle = curl_init($url);
+            $fp = fopen($destination, 'wb');
+            if ($handle === false || $fp === false) {
+                throw new \RuntimeException('Unable to prepare remote download handles.');
+            }
+
+            curl_setopt_array($handle, [
+                CURLOPT_FILE => $fp,
+                CURLOPT_FOLLOWLOCATION => true,
+                CURLOPT_TIMEOUT => 30,
+                CURLOPT_FAILONERROR => true,
+                CURLOPT_SSL_VERIFYPEER => false,
+                CURLOPT_SSL_VERIFYHOST => false,
+            ]);
+
+            $result = curl_exec($handle);
+            $error = curl_error($handle);
+            curl_close($handle);
+            fclose($fp);
+
+            if ($result === false) {
+                @unlink($destination);
+                throw new \RuntimeException('Package download failed: ' . $error);
+            }
+            return;
+        }
+
+        $context = stream_context_create([
+            'http' => ['timeout' => 30, 'follow_location' => 1],
+            'ssl' => ['verify_peer' => false, 'verify_peer_name' => false],
+        ]);
+        $payload = @file_get_contents($url, false, $context);
+        if ($payload === false || file_put_contents($destination, $payload) === false) {
+            throw new \RuntimeException('Package download failed via file_get_contents.');
+        }
+    }
+
+    private function syncCoreFiles(string $sourceDir, string $targetDir): int
+    {
+        $copied = 0;
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($sourceDir, \FilesystemIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::SELF_FIRST
+        );
+
+        foreach ($iterator as $item) {
+            $sourcePath = $item->getPathname();
+            $relativePath = str_replace('\\', '/', substr($sourcePath, strlen($sourceDir) + 1));
+            if ($relativePath === false || $relativePath === '') {
+                continue;
+            }
+
+            if ($relativePath === 'wp-content' || strpos($relativePath, 'wp-content/') === 0) {
+                continue;
+            }
+
+            $destinationPath = rtrim($targetDir, '/\\') . '/' . str_replace('/', DIRECTORY_SEPARATOR, $relativePath);
+
+            if ($item->isDir()) {
+                if (!is_dir($destinationPath) && !mkdir($destinationPath, 0755, true) && !is_dir($destinationPath)) {
+                    throw new \RuntimeException("Unable to create directory: {$relativePath}");
+                }
+                continue;
+            }
+
+            $destinationDir = dirname($destinationPath);
+            if (!is_dir($destinationDir) && !mkdir($destinationDir, 0755, true) && !is_dir($destinationDir)) {
+                throw new \RuntimeException("Unable to prepare directory for {$relativePath}");
+            }
+
+            if (!@copy($sourcePath, $destinationPath)) {
+                throw new \RuntimeException("Unable to restore core file: {$relativePath}");
+            }
+
+            $copied++;
+        }
+
+        return $copied;
+    }
+
+    private function createTempDirectory(): string
+    {
+        $dir = rtrim(sys_get_temp_dir(), '/\\') . '/wpdiagnose-core-' . bin2hex(random_bytes(6));
+        if (!mkdir($dir, 0700, true) && !is_dir($dir)) {
+            throw new \RuntimeException('Unable to create temporary working directory for core repair.');
+        }
+
+        return $dir;
+    }
+
+    private function removeDirectory(string $path): void
+    {
+        if (!is_dir($path)) {
+            return;
+        }
+
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($path, \FilesystemIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::CHILD_FIRST
+        );
+
+        foreach ($iterator as $item) {
+            if ($item->isDir()) {
+                @rmdir($item->getPathname());
+            } else {
+                @unlink($item->getPathname());
+            }
+        }
+
+        @rmdir($path);
     }
 
     private function resetPassword(string $username): bool
@@ -344,6 +649,36 @@ class CoreOperationsAgent implements DiagnosticInterface
         return false;
     }
 
+    private function getCurrentWordPressVersion(): ?string
+    {
+        if ($this->isWpLoaded && function_exists('get_bloginfo')) {
+            $version = (string) get_bloginfo('version');
+            if ($version !== '') {
+                return $version;
+            }
+        }
+
+        $versionFile = ABSPATH . 'wp-includes/version.php';
+        if (!is_file($versionFile)) {
+            return null;
+        }
+
+        $wp_version = null;
+        include $versionFile;
+        return is_string($wp_version) && $wp_version !== '' ? $wp_version : null;
+    }
+
+    private function resolveDebugLogPath(): string
+    {
+        $configVars = $this->parseWpConfig();
+        $configured = $configVars['WP_DEBUG_LOG'] ?? null;
+        if (is_string($configured) && $configured !== '' && $configured !== 'true' && $configured !== 'false') {
+            return $configured;
+        }
+
+        return rtrim(ABSPATH, '/\\') . '/wp-content/wp-diagnose-tool.log';
+    }
+
     private function locateWpConfigPath(): string
     {
         $candidates = [
@@ -371,9 +706,15 @@ class CoreOperationsAgent implements DiagnosticInterface
 
     private function outputErrorLog(): void
     {
-        $logFile = ABSPATH . 'wp-content/debug.log';
+        $logFile = $this->resolveDebugLogPath();
         if (!is_file($logFile)) {
-            echo json_encode(['success' => false, 'message' => 'debug.log not found.']);
+            while (ob_get_level()) ob_end_clean();
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode([
+                'success' => false,
+                'message' => 'Debug log not found at ' . $logFile,
+                'data' => ['path' => $logFile],
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
             exit;
         }
 
@@ -382,7 +723,14 @@ class CoreOperationsAgent implements DiagnosticInterface
         
         while (ob_get_level()) ob_end_clean();
         header('Content-Type: application/json; charset=utf-8');
-        echo json_encode(['success' => true, 'data' => implode("", $last100)], JSON_UNESCAPED_UNICODE);
+        echo json_encode([
+            'success' => true,
+            'message' => 'Debug log loaded successfully.',
+            'data' => [
+                'path' => $logFile,
+                'contents' => implode("", $last100),
+            ],
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         exit;
     }
 }

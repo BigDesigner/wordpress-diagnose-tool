@@ -2,12 +2,13 @@
 /**
  * WP Diagnose - Single File, EN/TR, Full & DB Mode
  * A drop-in diagnosis, maintenance, and plugin management tool for WordPress.
- * Upload to root directory as `wp-diagnose.php` – use it – then delete it.
+ * Upload to root directory as `wp-diagnose.php` - use it - then delete it.
  *
  * Author: https://github.com/BigDesigner
  */
 
 require_once dirname(__DIR__) . '/Core/Version.php';
+require_once dirname(__DIR__) . '/Core/SecurityManager.php';
 require_once dirname(__DIR__) . '/Core/DiagnosticInterface.php';
 require_once dirname(__DIR__) . '/Core/Engine.php';
 require_once dirname(__DIR__) . '/Core/Cleanup.php';
@@ -64,21 +65,12 @@ if ($is_api_request) {
 // Start output buffering immediately so any stray output can be discarded before JSON output.
 ob_start();
 
-// -------------------- SECURITY CONFIGURATION --------------------
-define('DIAG_TOKEN', 'SECURE_TOKEN_2026'); // Usage: wp-diagnose.php?token=SECURE_TOKEN_2026
-define('ALLOWED_IPS', ['127.0.0.1', '::1', 'CHANGE_TO_YOUR_STATIC_IP']); // Strict IP Allowlist
-define('LOG_FILE', __DIR__ . '/.ht-wp-diagnose.log');
+define('ACTION_LOG_FILE', __DIR__ . '/.ht-wp-diagnose.log');
 
-// -------------------- SECURITY ENFORCER --------------------
-$client_ip = $_SERVER['HTTP_CLIENT_IP'] ?? $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'];
-if (!in_array($client_ip, ALLOWED_IPS, true) && ALLOWED_IPS[2] !== 'CHANGE_TO_YOUR_STATIC_IP') {
-    http_response_code(403);
-    die('403 Forbidden: IP Address not whitelisted.');
-}
-
-if (!isset($_GET['token']) || $_GET['token'] !== DIAG_TOKEN) {
-    http_response_code(401);
-    die('401 Unauthorized: Invalid or missing access token.');
+$securityManager = new \WPDiagnose\Core\SecurityManager(storageDir: __DIR__);
+$securityDecision = $securityManager->authorize($_GET['action'] ?? 'dashboard');
+if (!$securityDecision['allowed']) {
+    $securityManager->emitDeniedResponse($securityDecision);
 }
 
 // -------------------- Try load WordPress --------------------
@@ -301,7 +293,7 @@ function wpd_log_action($action, $details = '') {
     $timestamp = date('Y-m-d H:i:s');
     $ip = $_SERVER['REMOTE_ADDR'] ?? 'UNKNOWN';
     $message = "[$timestamp] [IP: $ip] ACTION: $action" . ($details ? " | DETAILS: $details" : "") . PHP_EOL;
-    @file_put_contents(LOG_FILE, $message, FILE_APPEND | LOCK_EX);
+    @file_put_contents(ACTION_LOG_FILE, $message, FILE_APPEND | LOCK_EX);
 }
 
 // -------------------- Self-Destruct Mechanism --------------------
@@ -346,6 +338,61 @@ if ($file_age > $expiration_time) {
 </head>
 <body class="antialiased">
     <div x-data="diagnoseApp()" x-init="init()" class="min-h-screen p-4 md:p-8" x-cloak>
+        <div class="fixed top-4 right-4 z-50 w-full max-w-md space-y-3 pointer-events-none">
+            <template x-for="notice in notifications" :key="notice.id">
+                <div
+                    x-transition.opacity.duration.200ms
+                    class="pointer-events-auto rounded-lg border px-4 py-3 shadow-2xl backdrop-blur"
+                    :class="{
+                        'bg-emerald-950/90 border-emerald-500/40 text-emerald-100': notice.type === 'success',
+                        'bg-rose-950/90 border-rose-500/40 text-rose-100': notice.type === 'error',
+                        'bg-sky-950/90 border-sky-500/40 text-sky-100': notice.type === 'info'
+                    }"
+                >
+                    <div class="flex items-start gap-3">
+                        <div class="flex-1 text-sm leading-relaxed" x-text="notice.message"></div>
+                        <button
+                            type="button"
+                            @click="dismissNotification(notice.id)"
+                            class="text-current/70 hover:text-current transition"
+                        >&times;</button>
+                    </div>
+                </div>
+            </template>
+        </div>
+
+        <div
+            x-show="confirmState.open"
+            x-transition.opacity.duration.200ms
+            class="fixed inset-0 z-40 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4"
+        >
+            <div
+                @click.outside="resolveConfirmation(false)"
+                class="w-full max-w-lg rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl overflow-hidden"
+            >
+                <div class="px-6 py-5 border-b border-slate-800">
+                    <h3 class="text-lg font-bold text-slate-100" x-text="confirmState.title"></h3>
+                    <p class="mt-2 text-sm text-slate-400 leading-relaxed" x-text="confirmState.body"></p>
+                </div>
+                <div class="px-6 py-4 flex items-center justify-end gap-3 bg-slate-950/60">
+                    <button
+                        type="button"
+                        @click="resolveConfirmation(false)"
+                        class="px-4 py-2 rounded-lg border border-slate-700 text-slate-300 hover:border-slate-500 hover:text-white transition"
+                    >Cancel</button>
+                    <button
+                        type="button"
+                        @click="resolveConfirmation(true)"
+                        class="px-4 py-2 rounded-lg font-semibold transition"
+                        :class="confirmState.danger
+                            ? 'bg-rose-600 text-white hover:bg-rose-500'
+                            : 'bg-emerald-600 text-white hover:bg-emerald-500'"
+                        x-text="confirmState.confirmLabel"
+                    ></button>
+                </div>
+            </div>
+        </div>
+
         <!-- Header -->
         <header class="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center mb-10 border-b border-slate-700 pb-6 gap-4">
             <div>
@@ -357,11 +404,11 @@ if ($file_age > $expiration_time) {
             </div>
             
             <div class="flex gap-4 items-center">
-                <button @click="fetchReport()" :disabled="loading" class="bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white px-4 py-2 rounded text-sm font-semibold transition flex items-center gap-2">
+                <button type="button" @click="fetchReport()" :disabled="loading" class="bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white px-4 py-2 rounded text-sm font-semibold transition flex items-center gap-2">
                     <svg class="w-4 h-4" :class="loading ? 'animate-spin' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
                     Refresh
                 </button>
-                <button @click="selfDestruct()" class="bg-red-600/20 hover:bg-red-600 text-red-500 hover:text-white border border-red-600/50 px-4 py-2 rounded text-sm font-bold transition">Self-Destruct</button>
+                <button type="button" @click="selfDestruct()" class="bg-red-600/20 hover:bg-red-600 text-red-500 hover:text-white border border-red-600/50 px-4 py-2 rounded text-sm font-bold transition">Self-Destruct</button>
             </div>
         </header>
 
@@ -403,7 +450,7 @@ if ($file_age > $expiration_time) {
             </div>
 
             <!-- Agent Grid -->
-            <div x-show="!loading" class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div x-show="!loading" class="grid grid-cols-1 gap-8">
                 <template x-for="(report, agent) in reports" :key="agent">
                     <div x-show="activeTab === 'all' || activeTab === agent" class="bg-slate-800 border border-slate-700/50 rounded-xl shadow-2xl overflow-hidden flex flex-col hover:border-slate-600 transition">
                         <div class="px-6 py-4 bg-slate-800/80 border-t border-slate-700/60 flex justify-between items-center text-xs text-slate-400">
@@ -434,7 +481,7 @@ if ($file_age > $expiration_time) {
                                     <!-- Re-install Core Button for Watchdog -->
                                     <template x-if="(agent === 'CoreIntegrityAgent' && (id === 'mismatch_files' || id === 'missing_files')) && finding.status !== 'OK'">
                                         <div class="flex gap-2 mb-4">
-                                            <button @click="attemptFix('CoreOperationsAgent', 'reinstall_core')" class="text-[10px] font-bold uppercase tracking-wider bg-rose-600/20 hover:bg-rose-600 text-rose-400 hover:text-white border border-rose-600/50 px-4 py-2 rounded transition">
+                                            <button type="button" @click="attemptFix('CoreOperationsAgent', 'reinstall_core')" class="text-[10px] font-bold uppercase tracking-wider bg-rose-600/20 hover:bg-rose-600 text-rose-400 hover:text-white border border-rose-600/50 px-4 py-2 rounded transition">
                                                 Force Re-install WP Core
                                             </button>
                                         </div>
@@ -545,7 +592,7 @@ if ($file_age > $expiration_time) {
                                     <!-- Generic Action Buttons -->
                                     <template x-if="finding.status !== 'OK' && (agent === 'ServerInspector' || agent === 'BootstrapInspector' || agent === 'DBHealth')">
                                         <div class="flex gap-2">
-                                            <button @click="attemptFix(agent, id)" class="text-[10px] font-bold uppercase tracking-wider bg-emerald-600/20 hover:bg-emerald-600 text-emerald-400 hover:text-white border border-emerald-600/50 px-4 py-2 rounded transition">
+                                            <button type="button" @click="attemptFix(agent, id)" class="text-[10px] font-bold uppercase tracking-wider bg-emerald-600/20 hover:bg-emerald-600 text-emerald-400 hover:text-white border border-emerald-600/50 px-4 py-2 rounded transition">
                                                 Execute Recovery Routine
                                             </button>
                                         </div>
@@ -570,9 +617,57 @@ if ($file_age > $expiration_time) {
                 loading: true,
                 reports: {},
                 activeTab: 'all',
-                token: '<?php echo DIAG_TOKEN; ?>',
+                token: new URLSearchParams(window.location.search).get('token') || '',
+                notifications: [],
+                notificationSeed: 0,
+                confirmState: {
+                    open: false,
+                    title: '',
+                    body: '',
+                    confirmLabel: 'Confirm',
+                    danger: false,
+                    resolver: null
+                },
                 init() {
                     this.fetchReport();
+                },
+                notify(message, type = 'info', timeout = 4500) {
+                    const id = ++this.notificationSeed;
+                    this.notifications.push({ id, message, type });
+
+                    if (timeout > 0) {
+                        window.setTimeout(() => this.dismissNotification(id), timeout);
+                    }
+                },
+                dismissNotification(id) {
+                    this.notifications = this.notifications.filter((notice) => notice.id !== id);
+                },
+                askConfirmation(options = {}) {
+                    return new Promise((resolve) => {
+                        this.confirmState = {
+                            open: true,
+                            title: options.title || 'Confirm action',
+                            body: options.body || 'Do you want to continue?',
+                            confirmLabel: options.confirmLabel || 'Continue',
+                            danger: !!options.danger,
+                            resolver: resolve
+                        };
+                    });
+                },
+                resolveConfirmation(confirmed) {
+                    const resolver = this.confirmState.resolver;
+                    this.confirmState = {
+                        open: false,
+                        title: '',
+                        body: '',
+                        confirmLabel: 'Confirm',
+                        danger: false,
+                        resolver: null
+                    };
+
+                    if (resolver) {
+                        resolver(confirmed);
+                    }
                 },
                 async fetchReport() {
                     this.loading = true;
@@ -582,25 +677,24 @@ if ($file_age > $expiration_time) {
                         if (!contentType.includes('application/json')) {
                             const raw = await response.text();
                             console.error('[WP Diagnose] Non-JSON response from API:', raw.substring(0, 500));
-                            alert('API Bağlantı Hatası: Sunucu JSON formatında yanıt vermedi (Kalıntı veya PHP Hataları olabilir).');
-                            this.reports = {}; // Active agents will drop to 0
+                            this.notify('API baglanti hatasi: sunucu JSON formatinda yanit vermedi.', 'error');
+                            this.reports = {};
                         } else {
                             try {
                                 this.reports = await response.json();
-                                // Check if the backend reported a graceful crash
                                 if (this.reports.status === 'error' || (this.reports.success === false && this.reports.message)) {
-                                    alert('API Bağlantı Hatası: ' + this.reports.message);
+                                    this.notify('API baglanti hatasi: ' + this.reports.message, 'error');
                                     this.reports = {};
                                 }
                             } catch (parseErr) {
                                 console.error('[WP Diagnose] JSON Parse failed:', parseErr);
-                                alert('API Bağlantı Hatası: Gelen JSON verisi ayrıştırılamadı. Format bozuk.');
+                                this.notify('API baglanti hatasi: gelen JSON verisi ayrıştırılamadı.', 'error');
                                 this.reports = {};
                             }
                         }
                     } catch (e) {
                         console.error('[WP Diagnose] Network error:', e);
-                        alert('API Bağlantı Hatası: Sunucuya ulaşılamıyor veya bağlantı koptu.');
+                        this.notify('API baglanti hatasi: sunucuya ulasilamiyor veya baglanti koptu.', 'error');
                         this.reports = {};
                     }
                     setTimeout(() => { this.loading = false; }, 600);
@@ -610,23 +704,25 @@ if ($file_age > $expiration_time) {
                         const response = await fetch(`?token=${this.token}&action=fix&agent=${agent}&id=view_error_log&format=json`);
                         const result = await response.json();
                         if (result.success && result.data) {
-                            // Create modal manually parsing it
+                            const logPayload = typeof result.data === 'string'
+                                ? { path: 'wp-content/wp-diagnose-tool.log', contents: result.data }
+                                : result.data;
                             document.body.insertAdjacentHTML('beforeend', `
                                 <div id="errorModal" class="fixed inset-0 bg-slate-900/90 z-50 flex items-center justify-center p-4">
                                     <div class="bg-black border border-slate-700 w-full max-w-4xl max-h-[85vh] flex flex-col rounded-lg shadow-2xl">
                                         <div class="flex justify-between items-center p-4 border-b border-slate-800">
-                                            <h3 class="text-rose-500 font-mono font-bold text-sm">Emergency Output: wp-content/debug.log (Last 100 Lines)</h3>
+                                            <h3 class="text-rose-500 font-mono font-bold text-sm">Emergency Output: ${logPayload.path} (Last 100 Lines)</h3>
                                             <button onclick="document.getElementById('errorModal').remove()" class="text-slate-400 hover:text-white font-bold">&times;</button>
                                         </div>
-                                        <div class="p-4 overflow-y-auto font-mono text-xs text-slate-300 bg-[#0c0c0c] whitespace-pre-wrap leading-relaxed">${result.data.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
+                                        <div class="p-4 overflow-y-auto font-mono text-xs text-slate-300 bg-[#0c0c0c] whitespace-pre-wrap leading-relaxed">${(logPayload.contents || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
                                     </div>
                                 </div>
                             `);
                         } else {
-                            alert(result.message || 'Log empty or unavailable.');
+                            this.notify(result.message || 'Log empty or unavailable.', 'error');
                         }
                     } catch (e) {
-                        alert('Could not fetch log over API.');
+                        this.notify('Could not fetch log over API.', 'error');
                     }
                 },
                 formatFound(finding) {
@@ -649,16 +745,24 @@ if ($file_age > $expiration_time) {
                     return this.attemptFix(agent, actionId);
                 },
                 async attemptFix(agent, id) {
-                    if (!confirm(`Trigger Agentic Fix for [${id}]?`)) return;
-                    
+                    const confirmed = await this.askConfirmation({
+                        title: 'Trigger Agentic Fix',
+                        body: `Apply recovery action [${id}] now?`,
+                        confirmLabel: 'Run Fix',
+                        danger: id === 'reinstall_core' || id.startsWith('reset_admin:')
+                    });
+
+                    if (!confirmed) {
+                        return;
+                    }
+
                     this.loading = true;
-                    
+
                     try {
                         const fd = new FormData();
                         fd.append('agent', agent);
                         fd.append('id', id);
 
-                        // Optimistic UI updates mapping BEFORE network completion
                         if (id.startsWith('toggle_plugin:')) {
                             const slug = id.split(':')[1];
                             if (this.reports[agent] && this.reports[agent].manage_plugins && this.reports[agent].manage_plugins.data[slug]) {
@@ -679,30 +783,39 @@ if ($file_age > $expiration_time) {
                         });
                         const result = await response.json();
                         if (result.success) {
-                            alert(result.message || 'Action executed successfully.');
+                            this.notify(result.message || 'Action executed successfully.', 'success');
                             await this.fetchReport();
                         } else {
-                            alert(result.message || 'Recovery failed or blocked. Manual intervention advised.');
-                            await this.fetchReport(); // Revert optimistic UI
+                            this.notify(result.message || 'Recovery failed or blocked. Manual intervention advised.', 'error');
+                            await this.fetchReport();
                         }
                     } catch (e) {
-                        alert('API Communication Timeout or Error: ' + e.message);
+                        this.notify('API communication timeout or error: ' + e.message, 'error');
                         this.loading = false;
                     }
                 },
                 async selfDestruct() {
-                    if (!confirm('ULTIMATUM: Permanent recursive wipe of ALL diagnostic components. Proceed?')) return;
-                    
+                    const confirmed = await this.askConfirmation({
+                        title: 'Self-Destruct',
+                        body: 'Permanent recursive wipe of all diagnostic components. Proceed?',
+                        confirmLabel: 'Destroy',
+                        danger: true
+                    });
+
+                    if (!confirmed) {
+                        return;
+                    }
+
                     try {
                         const response = await fetch(`?token=${this.token}&action=self_destruct&format=json`);
                         const result = await response.json();
                         if (result.success) {
                             document.body.innerHTML = '<div class="min-h-screen flex flex-col items-center justify-center bg-slate-950 text-emerald-500 font-mono uppercase tracking-[0.5em] text-center p-10"><div>System Cleansed</div><div class="text-[10px] text-slate-700 mt-6 tracking-normal lowercase">All modular components purged from file system.</div></div>';
                         } else {
-                            alert('Recursion partially blocked. Manual directory removal required.');
+                            this.notify('Recursion partially blocked. Manual directory removal required.', 'error');
                         }
                     } catch (e) {
-                        alert('Wipe sequence initiated. Verify server state.');
+                        this.notify('Wipe sequence initiated. Verify server state.', 'info');
                     }
                 }
             }

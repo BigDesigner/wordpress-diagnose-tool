@@ -23,6 +23,7 @@ if (!is_dir($outputDir)) {
 // OOP class modules
 $coreModules = [
     'Core/Version.php',
+    'Core/SecurityManager.php',
     'Core/DiagnosticInterface.php',
     'Core/Engine.php',
     'Core/Cleanup.php',
