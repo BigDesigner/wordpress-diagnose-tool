@@ -18,6 +18,19 @@ require_once $projectRoot . '/src/Agents/AssetManagerAgent/AssetManagerAgent.php
 require_once $projectRoot . '/src/Agents/CoreOperationsAgent/CoreOperationsAgent.php';
 require_once $projectRoot . '/src/Agents/ThreatIntelAgent/ThreatIntelAgent.php';
 require_once $projectRoot . '/src/Agents/MalwareInspector/MalwareInspector.php';
+require_once $projectRoot . '/src/Agents/BackupAgent/BackupAgent.php';
+require_once $projectRoot . '/src/Agents/QuarantineAgent/QuarantineAgent.php';
+require_once $projectRoot . '/src/Agents/IncidentSnapshotAgent/IncidentSnapshotAgent.php';
+require_once $projectRoot . '/src/Agents/UserAccessAgent/UserAccessAgent.php';
+require_once $projectRoot . '/src/Agents/SecurityHeadersAgent/SecurityHeadersAgent.php';
+require_once $projectRoot . '/src/Agents/CronInspector/CronInspector.php';
+require_once $projectRoot . '/src/Agents/PerformanceAgent/PerformanceAgent.php';
+require_once $projectRoot . '/src/Agents/PluginConflictAgent/PluginConflictAgent.php';
+require_once $projectRoot . '/src/Agents/HTTPAgent/HTTPAgent.php';
+require_once $projectRoot . '/src/Agents/MailAgent/MailAgent.php';
+require_once $projectRoot . '/src/Agents/IntegrityRepairAgent/IntegrityRepairAgent.php';
+require_once $projectRoot . '/src/Agents/DatabaseRepairAgent/DatabaseRepairAgent.php';
+require_once $projectRoot . '/src/Agents/UpdateRiskAgent/UpdateRiskAgent.php';
 
 if (!defined('WPD_TEST_ROOT')) {
     define('WPD_TEST_ROOT', sys_get_temp_dir() . '/wp-diagnose-tests-root/');

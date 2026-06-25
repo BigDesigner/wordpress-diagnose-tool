@@ -266,4 +266,59 @@ final class AgentSmokeTest extends TestCase
         self::assertSame('WARN', $report['core_signature_review']['status']);
         self::assertContains('wp-admin/includes/file.php | system', $report['core_signature_review']['data']);
     }
+
+    public function testNewAgentsSmokeTests(): void
+    {
+        $backup = new \WPDiagnose\Agents\BackupAgent\BackupAgent(false);
+        $res = $backup->check();
+        self::assertArrayHasKey('backup_directory', $res);
+
+        $quarantine = new \WPDiagnose\Agents\QuarantineAgent\QuarantineAgent();
+        $res = $quarantine->check();
+        self::assertArrayHasKey('quarantine_status', $res);
+
+        $snapshot = new \WPDiagnose\Agents\IncidentSnapshotAgent\IncidentSnapshotAgent(false);
+        $res = $snapshot->check();
+        self::assertArrayHasKey('snapshots_list', $res);
+
+        $userAccess = new \WPDiagnose\Agents\UserAccessAgent\UserAccessAgent(false);
+        $res = $userAccess->check();
+        self::assertArrayHasKey('admin_accounts', $res);
+
+        $headers = new \WPDiagnose\Agents\SecurityHeadersAgent\SecurityHeadersAgent();
+        $res = $headers->check();
+        self::assertArrayHasKey('security_headers', $res);
+
+        $cron = new \WPDiagnose\Agents\CronInspector\CronInspector(false);
+        $res = $cron->check();
+        self::assertArrayHasKey('cron_status', $res);
+
+        $perf = new \WPDiagnose\Agents\PerformanceAgent\PerformanceAgent(false);
+        $res = $perf->check();
+        self::assertArrayHasKey('performance_status', $res);
+
+        $conflict = new \WPDiagnose\Agents\PluginConflictAgent\PluginConflictAgent(false);
+        $res = $conflict->check();
+        self::assertArrayHasKey('conflict_status', $res);
+
+        $http = new \WPDiagnose\Agents\HTTPAgent\HTTPAgent();
+        $res = $http->check();
+        self::assertArrayHasKey('homepage_reachability', $res);
+
+        $mail = new \WPDiagnose\Agents\MailAgent\MailAgent(false);
+        $res = $mail->check();
+        self::assertArrayHasKey('mail_system', $res);
+
+        $integrity = new \WPDiagnose\Agents\IntegrityRepairAgent\IntegrityRepairAgent();
+        $res = $integrity->check();
+        self::assertArrayHasKey('htaccess_integrity', $res);
+
+        $dbRepair = new \WPDiagnose\Agents\DatabaseRepairAgent\DatabaseRepairAgent(false);
+        $res = $dbRepair->check();
+        self::assertArrayHasKey('database_repair_status', $res);
+
+        $update = new \WPDiagnose\Agents\UpdateRiskAgent\UpdateRiskAgent(false);
+        $res = $update->check();
+        self::assertArrayHasKey('update_status', $res);
+    }
 }

@@ -22,6 +22,19 @@ require_once __DIR__ . '/Agents/AssetManagerAgent/AssetManagerAgent.php';
 require_once __DIR__ . '/Agents/CoreOperationsAgent/CoreOperationsAgent.php';
 require_once __DIR__ . '/Agents/ThreatIntelAgent/ThreatIntelAgent.php';
 require_once __DIR__ . '/Agents/MalwareInspector/MalwareInspector.php';
+require_once __DIR__ . '/Agents/BackupAgent/BackupAgent.php';
+require_once __DIR__ . '/Agents/QuarantineAgent/QuarantineAgent.php';
+require_once __DIR__ . '/Agents/IncidentSnapshotAgent/IncidentSnapshotAgent.php';
+require_once __DIR__ . '/Agents/UserAccessAgent/UserAccessAgent.php';
+require_once __DIR__ . '/Agents/SecurityHeadersAgent/SecurityHeadersAgent.php';
+require_once __DIR__ . '/Agents/CronInspector/CronInspector.php';
+require_once __DIR__ . '/Agents/PerformanceAgent/PerformanceAgent.php';
+require_once __DIR__ . '/Agents/PluginConflictAgent/PluginConflictAgent.php';
+require_once __DIR__ . '/Agents/HTTPAgent/HTTPAgent.php';
+require_once __DIR__ . '/Agents/MailAgent/MailAgent.php';
+require_once __DIR__ . '/Agents/IntegrityRepairAgent/IntegrityRepairAgent.php';
+require_once __DIR__ . '/Agents/DatabaseRepairAgent/DatabaseRepairAgent.php';
+require_once __DIR__ . '/Agents/UpdateRiskAgent/UpdateRiskAgent.php';
 
 // -------------------- WP-CLI INTEGRATION --------------------
 if (defined('WP_CLI') && WP_CLI) {
@@ -37,6 +50,19 @@ if (defined('WP_CLI') && WP_CLI) {
         $engine->registerAgent(new \WPDiagnose\Agents\CoreOperationsAgent\CoreOperationsAgent(true));
         $engine->registerAgent(new \WPDiagnose\Agents\ThreatIntelAgent\ThreatIntelAgent(true));
         $engine->registerAgent(new \WPDiagnose\Agents\MalwareInspector\MalwareInspector());
+        $engine->registerAgent(new \WPDiagnose\Agents\BackupAgent\BackupAgent(true));
+        $engine->registerAgent(new \WPDiagnose\Agents\QuarantineAgent\QuarantineAgent());
+        $engine->registerAgent(new \WPDiagnose\Agents\IncidentSnapshotAgent\IncidentSnapshotAgent(true));
+        $engine->registerAgent(new \WPDiagnose\Agents\UserAccessAgent\UserAccessAgent(true));
+        $engine->registerAgent(new \WPDiagnose\Agents\SecurityHeadersAgent\SecurityHeadersAgent());
+        $engine->registerAgent(new \WPDiagnose\Agents\CronInspector\CronInspector(true));
+        $engine->registerAgent(new \WPDiagnose\Agents\PerformanceAgent\PerformanceAgent(true));
+        $engine->registerAgent(new \WPDiagnose\Agents\PluginConflictAgent\PluginConflictAgent(true));
+        $engine->registerAgent(new \WPDiagnose\Agents\HTTPAgent\HTTPAgent());
+        $engine->registerAgent(new \WPDiagnose\Agents\MailAgent\MailAgent(true));
+        $engine->registerAgent(new \WPDiagnose\Agents\IntegrityRepairAgent\IntegrityRepairAgent());
+        $engine->registerAgent(new \WPDiagnose\Agents\DatabaseRepairAgent\DatabaseRepairAgent(true));
+        $engine->registerAgent(new \WPDiagnose\Agents\UpdateRiskAgent\UpdateRiskAgent(true));
 
         if (isset($assoc_args['fix'])) {
             $agent = $assoc_args['agent'] ?? 'ServerInspector';
@@ -240,6 +266,19 @@ if ($is_json || isset($_GET['action'])) {
         $engine->registerAgent(new \WPDiagnose\Agents\CoreOperationsAgent\CoreOperationsAgent($WP_LOADED));
         $engine->registerAgent(new \WPDiagnose\Agents\ThreatIntelAgent\ThreatIntelAgent($WP_LOADED));
         $engine->registerAgent(new \WPDiagnose\Agents\MalwareInspector\MalwareInspector());
+        $engine->registerAgent(new \WPDiagnose\Agents\BackupAgent\BackupAgent($WP_LOADED));
+        $engine->registerAgent(new \WPDiagnose\Agents\QuarantineAgent\QuarantineAgent());
+        $engine->registerAgent(new \WPDiagnose\Agents\IncidentSnapshotAgent\IncidentSnapshotAgent($WP_LOADED));
+        $engine->registerAgent(new \WPDiagnose\Agents\UserAccessAgent\UserAccessAgent($WP_LOADED));
+        $engine->registerAgent(new \WPDiagnose\Agents\SecurityHeadersAgent\SecurityHeadersAgent());
+        $engine->registerAgent(new \WPDiagnose\Agents\CronInspector\CronInspector($WP_LOADED));
+        $engine->registerAgent(new \WPDiagnose\Agents\PerformanceAgent\PerformanceAgent($WP_LOADED));
+        $engine->registerAgent(new \WPDiagnose\Agents\PluginConflictAgent\PluginConflictAgent($WP_LOADED));
+        $engine->registerAgent(new \WPDiagnose\Agents\HTTPAgent\HTTPAgent());
+        $engine->registerAgent(new \WPDiagnose\Agents\MailAgent\MailAgent($WP_LOADED));
+        $engine->registerAgent(new \WPDiagnose\Agents\IntegrityRepairAgent\IntegrityRepairAgent());
+        $engine->registerAgent(new \WPDiagnose\Agents\DatabaseRepairAgent\DatabaseRepairAgent($WP_LOADED));
+        $engine->registerAgent(new \WPDiagnose\Agents\UpdateRiskAgent\UpdateRiskAgent($WP_LOADED));
 
         $response = ['success' => true, 'message' => '', 'data' => []];
 
@@ -612,14 +651,246 @@ if ($file_age > $expiration_time) {
                                         </div>
                                     </template>
                                     
-                                    <!-- Re-install Core Button for Watchdog -->
-                                    <template x-if="(agent === 'CoreIntegrityAgent' && (id === 'mismatch_files' || id === 'missing_files')) && finding.status !== 'OK'">
-                                        <div class="flex gap-2 mb-4">
-                                            <button type="button" @click="attemptFix('CoreOperationsAgent', 'reinstall_core')" class="text-[10px] font-bold uppercase tracking-wider bg-rose-600/20 hover:bg-rose-600 text-rose-400 hover:text-white border border-rose-600/50 px-4 py-2 rounded transition">
-                                                Force Re-install WP Core
-                                            </button>
-                                        </div>
-                                    </template>
+                                     <!-- Re-install Core Button for Watchdog -->
+                                     <template x-if="(agent === 'CoreIntegrityAgent' && (id === 'mismatch_files' || id === 'missing_files')) && finding.status !== 'OK'">
+                                         <div class="flex gap-2 mb-4">
+                                             <button type="button" @click="attemptFix('CoreOperationsAgent', 'reinstall_core')" class="text-[10px] font-bold uppercase tracking-wider bg-rose-600/20 hover:bg-rose-600 text-rose-400 hover:text-white border border-rose-600/50 px-4 py-2 rounded transition">
+                                                 Force Re-install WP Core
+                                             </button>
+                                         </div>
+                                     </template>
+
+                                     <!-- BackupAgent UI -->
+                                     <template x-if="agent === 'BackupAgent' && id === 'backup_directory'">
+                                         <div class="space-y-4 mb-4">
+                                             <div class="flex flex-wrap gap-2">
+                                                 <button type="button" @click="attemptFix('BackupAgent', 'backup_db')" class="text-[10px] font-bold uppercase tracking-wider bg-emerald-600/20 hover:bg-emerald-600 text-emerald-400 hover:text-white border border-emerald-600/50 px-4 py-2 rounded transition">Backup Database</button>
+                                                 <button type="button" @click="attemptFix('BackupAgent', 'backup_wpcontent')" class="text-[10px] font-bold uppercase tracking-wider bg-emerald-600/20 hover:bg-emerald-600 text-emerald-400 hover:text-white border border-emerald-600/50 px-4 py-2 rounded transition">Backup wp-content</button>
+                                                 <button type="button" @click="attemptFix('BackupAgent', 'backup_full')" class="text-[10px] font-bold uppercase tracking-wider bg-emerald-600/20 hover:bg-emerald-600 text-emerald-400 hover:text-white border border-emerald-600/50 px-4 py-2 rounded transition">Full WordPress Backup</button>
+                                             </div>
+                                             <template x-if="finding.data && finding.data.length > 0">
+                                                 <div class="overflow-x-auto rounded-lg border border-slate-700 bg-slate-900/30">
+                                                     <table class="w-full text-left text-xs text-slate-300">
+                                                         <thead class="bg-slate-800 text-[10px] uppercase font-bold text-slate-400 border-b border-slate-700/60">
+                                                             <tr>
+                                                                 <th class="px-4 py-2">Filename</th>
+                                                                 <th class="px-4 py-2">Type</th>
+                                                                 <th class="px-4 py-2">Size</th>
+                                                                 <th class="px-4 py-2">Created At</th>
+                                                                 <th class="px-4 py-2 text-right">Action</th>
+                                                             </tr>
+                                                         </thead>
+                                                         <tbody class="divide-y divide-slate-800">
+                                                             <template x-for="backup in finding.data" :key="backup.filename">
+                                                                 <tr class="hover:bg-slate-800/40">
+                                                                     <td class="px-4 py-2 font-mono text-sky-400" x-text="backup.filename"></td>
+                                                                     <td class="px-4 py-2" x-text="backup.type"></td>
+                                                                     <td class="px-4 py-2" x-text="backup.size"></td>
+                                                                     <td class="px-4 py-2" x-text="backup.created_at"></td>
+                                                                     <td class="px-4 py-2 text-right">
+                                                                         <button type="button" @click="attemptFix('BackupAgent', 'delete_backup:' + backup.filename)" class="text-[9px] font-bold uppercase text-rose-400 hover:text-rose-200 border border-rose-500/30 px-2 py-1 rounded bg-rose-500/10">Delete</button>
+                                                                     </td>
+                                                                 </tr>
+                                                             </template>
+                                                         </tbody>
+                                                     </table>
+                                                 </div>
+                                             </template>
+                                         </div>
+                                     </template>
+
+                                     <!-- QuarantineAgent UI -->
+                                     <template x-if="agent === 'QuarantineAgent' && id === 'quarantine_status'">
+                                         <div class="space-y-4 mb-4">
+                                             <template x-if="finding.data && Object.keys(finding.data).length > 0">
+                                                 <div class="overflow-x-auto rounded-lg border border-slate-700 bg-slate-900/30">
+                                                     <table class="w-full text-left text-xs text-slate-300">
+                                                         <thead class="bg-slate-800 text-[10px] uppercase font-bold text-slate-400 border-b border-slate-700/60">
+                                                             <tr>
+                                                                 <th class="px-4 py-2">Filename</th>
+                                                                 <th class="px-4 py-2">Original Path</th>
+                                                                 <th class="px-4 py-2">Size</th>
+                                                                 <th class="px-4 py-2">Date Quarantined</th>
+                                                                 <th class="px-4 py-2 text-right">Actions</th>
+                                                             </tr>
+                                                         </thead>
+                                                         <tbody class="divide-y divide-slate-800">
+                                                             <template x-for="(props, hash) in finding.data" :key="hash">
+                                                                 <tr class="hover:bg-slate-800/40">
+                                                                     <td class="px-4 py-2 font-mono text-amber-400" x-text="props.filename"></td>
+                                                                     <td class="px-4 py-2 font-mono truncate max-w-[200px]" x-text="props.original_path"></td>
+                                                                     <td class="px-4 py-2" x-text="(props.size / 1024).toFixed(2) + ' KB'"></td>
+                                                                     <td class="px-4 py-2" x-text="props.quarantined_at"></td>
+                                                                     <td class="px-4 py-2 text-right space-x-2">
+                                                                         <button type="button" @click="attemptFix('QuarantineAgent', 'restore_file:' + hash)" class="text-[9px] font-bold uppercase text-emerald-400 hover:text-emerald-200 border border-emerald-500/30 px-2 py-1 rounded bg-emerald-500/10">Restore</button>
+                                                                         <button type="button" @click="attemptFix('QuarantineAgent', 'delete_quarantined:' + hash)" class="text-[9px] font-bold uppercase text-rose-400 hover:text-rose-200 border border-rose-500/30 px-2 py-1 rounded bg-rose-500/10">Delete</button>
+                                                                     </td>
+                                                                 </tr>
+                                                             </template>
+                                                         </tbody>
+                                                     </table>
+                                                 </div>
+                                             </template>
+                                             <div class="p-4 border border-slate-700 bg-slate-900/60 rounded-lg">
+                                                 <span class="text-xs font-bold text-slate-300 block mb-2 uppercase tracking-wider">Emergency Quarantine File Path</span>
+                                                 <div class="flex gap-2">
+                                                     <input type="text" x-model="quarantinePathInput" placeholder="Enter absolute file path to isolate (e.g. /var/www/wp-content/uploads/backdoor.php)" class="flex-1 rounded border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-100 outline-none transition focus:border-amber-500">
+                                                     <button type="button" @click="quarantineManualFile()" class="px-4 py-2 text-xs font-bold bg-amber-600 hover:bg-amber-500 text-white rounded transition">Quarantine File</button>
+                                                 </div>
+                                             </div>
+                                         </div>
+                                     </template>
+
+                                     <!-- UserAccessAgent UI -->
+                                     <template x-if="agent === 'UserAccessAgent' && id === 'admin_accounts'">
+                                         <div class="space-y-4 mb-4">
+                                             <template x-if="finding.data && finding.data.length > 0">
+                                                 <div class="overflow-x-auto rounded-lg border border-slate-700 bg-slate-900/30">
+                                                     <table class="w-full text-left text-xs text-slate-300">
+                                                         <thead class="bg-slate-800 text-[10px] uppercase font-bold text-slate-400 border-b border-slate-700/60">
+                                                             <tr>
+                                                                 <th class="px-4 py-2">ID</th>
+                                                                 <th class="px-4 py-2">Username</th>
+                                                                 <th class="px-4 py-2">Email</th>
+                                                                 <th class="px-4 py-2">Registered At</th>
+                                                                 <th class="px-4 py-2 text-right">Actions</th>
+                                                             </tr>
+                                                         </thead>
+                                                         <tbody class="divide-y divide-slate-800">
+                                                             <template x-for="admin in finding.data" :key="admin.id">
+                                                                 <tr class="hover:bg-slate-800/40">
+                                                                     <td class="px-4 py-2 text-slate-500" x-text="admin.id"></td>
+                                                                     <td class="px-4 py-2 font-bold text-sky-400" x-text="admin.user_login"></td>
+                                                                     <td class="px-4 py-2" x-text="admin.user_email"></td>
+                                                                     <td class="px-4 py-2" x-text="admin.registered"></td>
+                                                                     <td class="px-4 py-2 text-right space-x-2">
+                                                                         <button type="button" @click="attemptFix('UserAccessAgent', 'demote_admin:' + admin.id)" class="text-[9px] font-bold uppercase text-amber-400 hover:text-amber-200 border border-amber-500/30 px-2 py-1 rounded bg-amber-500/10">Demote</button>
+                                                                         <button type="button" @click="attemptFix('UserAccessAgent', 'delete_user:' + admin.id)" class="text-[9px] font-bold uppercase text-rose-400 hover:text-rose-200 border border-rose-500/30 px-2 py-1 rounded bg-rose-500/10">Delete</button>
+                                                                     </td>
+                                                                 </tr>
+                                                             </template>
+                                                         </tbody>
+                                                     </table>
+                                                 </div>
+                                             </template>
+                                         </div>
+                                     </template>
+
+                                     <!-- SecurityHeadersAgent UI -->
+                                     <template x-if="agent === 'SecurityHeadersAgent' && id === 'security_headers' && finding.status !== 'OK'">
+                                         <div class="flex gap-2 mb-4">
+                                             <button type="button" @click="attemptFix('SecurityHeadersAgent', 'apply_headers')" class="text-[10px] font-bold uppercase tracking-wider bg-emerald-600/20 hover:bg-emerald-600 text-emerald-400 hover:text-white border border-emerald-600/50 px-4 py-2 rounded transition">
+                                                 Apply Hardening Headers to .htaccess
+                                             </button>
+                                         </div>
+                                     </template>
+
+                                     <!-- CronInspector UI -->
+                                     <template x-if="agent === 'CronInspector' && id === 'overdue_cron_jobs' && finding.status !== 'OK'">
+                                         <div class="flex gap-2 mb-4">
+                                             <button type="button" @click="attemptFix('CronInspector', 'clear_overdue_crons')" class="text-[10px] font-bold uppercase tracking-wider bg-amber-600/20 hover:bg-amber-600 text-amber-400 hover:text-white border border-amber-600/50 px-4 py-2 rounded transition">
+                                                 Clear Overdue Cron Tasks
+                                             </button>
+                                         </div>
+                                     </template>
+
+                                     <!-- PerformanceAgent UI -->
+                                     <template x-if="agent === 'PerformanceAgent' && id === 'transients_count' && finding.status !== 'OK'">
+                                         <div class="flex gap-2 mb-4">
+                                             <button type="button" @click="attemptFix('PerformanceAgent', 'clear_transients')" class="text-[10px] font-bold uppercase tracking-wider bg-sky-600/20 hover:bg-sky-600 text-sky-400 hover:text-white border border-sky-600/50 px-4 py-2 rounded transition">
+                                                 Clear Transients
+                                             </button>
+                                         </div>
+                                     </template>
+
+                                     <!-- PluginConflictAgent UI -->
+                                     <template x-if="agent === 'PluginConflictAgent' && id === 'conflict_debugging'">
+                                         <div class="flex gap-2 mb-4">
+                                             <template x-if="finding.data && finding.data.has_snapshot">
+                                                 <button type="button" @click="attemptFix('PluginConflictAgent', 'restore_plugins_snapshot')" class="text-[10px] font-bold uppercase tracking-wider bg-emerald-600/20 hover:bg-emerald-600 text-emerald-400 hover:text-white border border-emerald-600/50 px-4 py-2 rounded transition">
+                                                     Restore Active Plugins State
+                                                 </button>
+                                             </template>
+                                             <template x-if="finding.data && !finding.data.has_snapshot">
+                                                 <button type="button" @click="attemptFix('PluginConflictAgent', 'deactivate_all_plugins')" class="text-[10px] font-bold uppercase tracking-wider bg-rose-600/20 hover:bg-rose-600 text-rose-400 hover:text-white border border-rose-600/50 px-4 py-2 rounded transition">
+                                                     Safe Mode: Deactivate All Plugins
+                                                 </button>
+                                             </template>
+                                         </div>
+                                     </template>
+
+                                     <!-- MailAgent UI -->
+                                     <template x-if="agent === 'MailAgent' && id === 'mail_system'">
+                                         <div class="p-4 border border-slate-700 bg-slate-900/60 rounded-lg mb-4">
+                                             <span class="text-xs font-bold text-slate-300 block mb-2 uppercase tracking-wider">Send Test Email</span>
+                                             <div class="flex gap-2">
+                                                 <input type="email" x-model="testEmailInput" placeholder="Enter recipient email address" class="flex-1 rounded border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-100 outline-none transition focus:border-sky-500">
+                                                 <button type="button" @click="sendTestMail()" class="px-4 py-2 text-xs font-bold bg-sky-600 hover:bg-sky-500 text-white rounded transition">Send Test Mail</button>
+                                             </div>
+                                         </div>
+                                     </template>
+
+                                     <!-- IntegrityRepairAgent UI -->
+                                     <template x-if="agent === 'IntegrityRepairAgent'">
+                                         <div class="flex gap-2 mb-4">
+                                             <template x-if="id === 'htaccess_integrity' && finding.status !== 'OK'">
+                                                 <button type="button" @click="attemptFix('IntegrityRepairAgent', 'repair_htaccess')" class="text-[10px] font-bold uppercase tracking-wider bg-rose-600/20 hover:bg-rose-600 text-rose-400 hover:text-white border border-rose-600/50 px-4 py-2 rounded transition">
+                                                     Re-create Standard .htaccess
+                                                 </button>
+                                             </template>
+                                             <template x-if="id === 'index_php_integrity' && finding.status !== 'OK'">
+                                                 <button type="button" @click="attemptFix('IntegrityRepairAgent', 'repair_index_php')" class="text-[10px] font-bold uppercase tracking-wider bg-rose-600/20 hover:bg-rose-600 text-rose-400 hover:text-white border border-rose-600/50 px-4 py-2 rounded transition">
+                                                     Restore Standard index.php
+                                                 </button>
+                                             </template>
+                                         </div>
+                                     </template>
+
+                                     <!-- DatabaseRepairAgent UI -->
+                                     <template x-if="agent === 'DatabaseRepairAgent' && id === 'table_integrity'">
+                                         <div class="flex gap-2 mb-4">
+                                             <button type="button" @click="attemptFix('DatabaseRepairAgent', 'repair_database')" class="text-[10px] font-bold uppercase tracking-wider bg-emerald-600/20 hover:bg-emerald-600 text-emerald-400 hover:text-white border border-emerald-600/50 px-4 py-2 rounded transition">
+                                                 Repair & Optimize All Tables
+                                             </button>
+                                         </div>
+                                     </template>
+
+                                     <!-- IncidentSnapshotAgent UI -->
+                                     <template x-if="agent === 'IncidentSnapshotAgent' && id === 'snapshots_list'">
+                                         <div class="space-y-4 mb-4">
+                                             <div class="flex gap-2">
+                                                 <button type="button" @click="attemptFix('IncidentSnapshotAgent', 'create_snapshot')" class="text-[10px] font-bold uppercase tracking-wider bg-emerald-600/20 hover:bg-emerald-600 text-emerald-400 hover:text-white border border-emerald-600/50 px-4 py-2 rounded transition">
+                                                     Take System Snapshot
+                                                 </button>
+                                             </div>
+                                             <template x-if="finding.data && finding.data.length > 0">
+                                                 <div class="overflow-x-auto rounded-lg border border-slate-700 bg-slate-900/30">
+                                                     <table class="w-full text-left text-xs text-slate-300">
+                                                         <thead class="bg-slate-800 text-[10px] uppercase font-bold text-slate-400 border-b border-slate-700/60">
+                                                             <tr>
+                                                                 <th class="px-4 py-2">Filename</th>
+                                                                 <th class="px-4 py-2">Size</th>
+                                                                 <th class="px-4 py-2">Created At</th>
+                                                                 <th class="px-4 py-2 text-right">Action</th>
+                                                             </tr>
+                                                         </thead>
+                                                         <tbody class="divide-y divide-slate-800">
+                                                             <template x-for="snap in finding.data" :key="snap.filename">
+                                                                 <tr class="hover:bg-slate-800/40">
+                                                                     <td class="px-4 py-2 font-mono text-sky-400" x-text="snap.filename"></td>
+                                                                     <td class="px-4 py-2" x-text="snap.size"></td>
+                                                                     <td class="px-4 py-2" x-text="snap.created_at"></td>
+                                                                     <td class="px-4 py-2 text-right">
+                                                                         <button type="button" @click="attemptFix('IncidentSnapshotAgent', 'delete_snapshot:' + snap.filename)" class="text-[9px] font-bold uppercase text-rose-400 hover:text-rose-200 border border-rose-500/30 px-2 py-1 rounded bg-rose-500/10">Delete</button>
+                                                                     </td>
+                                                                 </tr>
+                                                             </template>
+                                                         </tbody>
+                                                     </table>
+                                                 </div>
+                                             </template>
+                                         </div>
+                                     </template>
 
                                     <!-- Dynamic Data Table UI (The Scannable Layout) -->
                                     <template x-if="finding.data && typeof finding.data === 'object'">
@@ -770,6 +1041,8 @@ if ($file_age > $expiration_time) {
                 threatIntelApiKeyDraft: '',
                 notifications: [],
                 notificationSeed: 0,
+                quarantinePathInput: '',
+                testEmailInput: '',
                 confirmState: {
                     open: false,
                     title: '',
@@ -792,7 +1065,20 @@ if ($file_age > $expiration_time) {
                         AssetManagerAgent: 'Asset Manager',
                         CoreOperationsAgent: 'Core Operations',
                         ThreatIntelAgent: 'Threat Intel',
-                        MalwareInspector: 'Malware Inspector'
+                        MalwareInspector: 'Malware Inspector',
+                        BackupAgent: 'Backup & Recovery',
+                        QuarantineAgent: 'Quarantine Manager',
+                        IncidentSnapshotAgent: 'Incident Snapshot',
+                        UserAccessAgent: 'User Access Audit',
+                        SecurityHeadersAgent: 'Security Headers',
+                        CronInspector: 'Cron Inspector',
+                        PerformanceAgent: 'Performance & Bloat',
+                        PluginConflictAgent: 'Conflict Debugger',
+                        HTTPAgent: 'HTTP Diagnostics',
+                        MailAgent: 'Mail Diagnostics',
+                        IntegrityRepairAgent: 'Integrity Repair',
+                        DatabaseRepairAgent: 'Database Repair',
+                        UpdateRiskAgent: 'Update Risk Analyser'
                     };
                     if (labels[agent]) {
                         return labels[agent];
@@ -846,6 +1132,27 @@ if ($file_age > $expiration_time) {
                     const config = this.reports?.ThreatIntelAgent?.intel_configuration?.data;
                     if (!config || config.api_key_status !== 'configured') {
                         this.threatIntelApiKeyDraft = '';
+                    }
+                },
+                async quarantineManualFile() {
+                    if (!this.quarantinePathInput.trim()) {
+                        this.notify('Please specify a file path to quarantine.', 'error');
+                        return;
+                    }
+                    const encoded = btoa(this.quarantinePathInput.trim());
+                    const success = await this.attemptFix('QuarantineAgent', 'quarantine_file:' + encoded);
+                    if (success) {
+                        this.quarantinePathInput = '';
+                    }
+                },
+                async sendTestMail() {
+                    if (!this.testEmailInput.trim()) {
+                        this.notify('Please specify an email address.', 'error');
+                        return;
+                    }
+                    const success = await this.attemptFix('MailAgent', 'send_test_mail:' + this.testEmailInput.trim());
+                    if (success) {
+                        this.testEmailInput = '';
                     }
                 },
                 notify(message, type = 'info', timeout = 4500) {

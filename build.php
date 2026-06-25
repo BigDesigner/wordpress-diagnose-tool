@@ -37,6 +37,19 @@ $coreModules = [
     'src/Agents/CoreOperationsAgent/CoreOperationsAgent.php',
     'src/Agents/ThreatIntelAgent/ThreatIntelAgent.php',
     'src/Agents/MalwareInspector/MalwareInspector.php',
+    'src/Agents/BackupAgent/BackupAgent.php',
+    'src/Agents/QuarantineAgent/QuarantineAgent.php',
+    'src/Agents/IncidentSnapshotAgent/IncidentSnapshotAgent.php',
+    'src/Agents/UserAccessAgent/UserAccessAgent.php',
+    'src/Agents/SecurityHeadersAgent/SecurityHeadersAgent.php',
+    'src/Agents/CronInspector/CronInspector.php',
+    'src/Agents/PerformanceAgent/PerformanceAgent.php',
+    'src/Agents/PluginConflictAgent/PluginConflictAgent.php',
+    'src/Agents/HTTPAgent/HTTPAgent.php',
+    'src/Agents/MailAgent/MailAgent.php',
+    'src/Agents/IntegrityRepairAgent/IntegrityRepairAgent.php',
+    'src/Agents/DatabaseRepairAgent/DatabaseRepairAgent.php',
+    'src/Agents/UpdateRiskAgent/UpdateRiskAgent.php',
 ];
 
 // Procedural entry point
