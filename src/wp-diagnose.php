@@ -502,10 +502,54 @@ if ($file_age > $expiration_time) {
                         @click="resolveConfirmation(true)"
                         class="px-4 py-2 rounded-lg font-semibold transition"
                         :class="confirmState.danger
-                            ? 'bg-rose-600 text-white hover:bg-rose-500'
-                            : 'bg-emerald-600 text-white hover:bg-emerald-500'"
+                        ? 'bg-rose-600 text-white hover:bg-rose-500'
+                        : 'bg-emerald-600 text-white hover:bg-emerald-500'"
                         x-text="confirmState.confirmLabel"
                     ></button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Arbitrary File Editor Modal -->
+        <div
+            x-show="arbitraryEditor.open"
+            x-transition.opacity.duration.200ms
+            class="fixed inset-0 z-[60] bg-slate-950/90 backdrop-blur-sm flex items-center justify-center p-4"
+            style="display: none;"
+        >
+            <div
+                class="w-full max-w-4xl h-[85vh] rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl flex flex-col overflow-hidden"
+            >
+                <div class="px-6 py-4 border-b border-slate-800 flex justify-between items-center bg-slate-950">
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs font-bold bg-sky-600/20 text-sky-400 border border-sky-500/30 px-2 py-0.5 rounded uppercase">Emergency Editor</span>
+                        <h3 class="text-slate-200 font-mono text-xs font-bold truncate max-w-[500px]" x-text="arbitraryEditor.path"></h3>
+                    </div>
+                    <button type="button" @click="arbitraryEditor.open = false" class="text-slate-400 hover:text-white text-xl font-bold">&times;</button>
+                </div>
+                <div class="flex-1 p-4 bg-slate-950">
+                    <textarea 
+                        x-model="arbitraryEditor.content" 
+                        class="w-full h-full font-mono text-xs text-slate-300 bg-slate-900 border border-slate-800 rounded p-4 focus:outline-none focus:border-sky-500 focus:ring-0 leading-relaxed resize-none"
+                    ></textarea>
+                </div>
+                <div class="px-6 py-4 flex items-center justify-end gap-3 bg-slate-900 border-t border-slate-800">
+                    <button
+                        type="button"
+                        @click="arbitraryEditor.open = false"
+                        class="px-4 py-2 rounded-lg border border-slate-700 text-slate-300 hover:border-slate-500 hover:text-white transition text-xs font-semibold"
+                    >Cancel</button>
+                    <button
+                        type="button"
+                        @click="saveArbitraryFile()"
+                        :disabled="arbitraryEditor.saving"
+                        class="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold transition text-xs flex items-center gap-2"
+                    >
+                        <template x-if="arbitraryEditor.saving">
+                            <span class="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                        </template>
+                        Save File
+                    </button>
                 </div>
             </div>
         </div>
@@ -980,19 +1024,26 @@ if ($file_age > $expiration_time) {
                                                               </button>
                                                           </div>
                                                       </div>
+                                              <!-- Serialized Search & Replace Tool -->
+                                              <div x-data="{ dbSearch: '', dbReplace: '' }" class="border border-slate-700/60 rounded-xl p-4 bg-slate-900/50 max-w-xl">
+                                                  <h4 class="text-xs font-bold text-slate-200 uppercase tracking-wider mb-2">Database Search & Replace (Serialized-Safe)</h4>
+                                                  <p class="text-[11px] text-slate-400 mb-4 leading-relaxed">Runs search-and-replace across character/text columns in all prefix-matching tables. Safely modifies PHP serialized options without corrupting them.</p>
+                                                  <div class="flex flex-col md:flex-row gap-3 items-end">
+                                                      <div class="flex-1 space-y-1">
+                                                          <label class="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Search For</label>
+                                                          <input type="text" x-model="dbSearch" placeholder="e.g. http://olddomain.com" class="w-full text-xs font-mono bg-slate-950 border border-slate-800 rounded p-2 focus:outline-none focus:border-sky-500 focus:ring-0 text-slate-300">
+                                                      </div>
+                                                      <div class="flex-1 space-y-1">
+                                                          <label class="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Replace With</label>
+                                                          <input type="text" x-model="dbReplace" placeholder="e.g. https://newdomain.com" class="w-full text-xs font-mono bg-slate-950 border border-slate-800 rounded p-2 focus:outline-none focus:border-sky-500 focus:ring-0 text-slate-300">
+                                                      </div>
+                                                      <button type="button" @click="attemptFix('DatabaseRepairAgent', 'search_replace', { search: dbSearch, replace: dbReplace })" class="px-4 py-2 rounded text-xs font-bold uppercase bg-amber-600/20 hover:bg-amber-600 text-amber-400 hover:text-white border border-amber-600/50 transition">
+                                                          Execute
+                                                      </button>
                                                   </div>
-                                              </template>
+                                              </div>
                                           </div>
                                       </template>
-
-                                     <!-- DatabaseRepairAgent UI -->
-                                     <template x-if="agent === 'DatabaseRepairAgent' && id === 'table_integrity'">
-                                         <div class="flex gap-2 mb-4">
-                                             <button type="button" @click="attemptFix('DatabaseRepairAgent', 'repair_database')" class="text-[10px] font-bold uppercase tracking-wider bg-emerald-600/20 hover:bg-emerald-600 text-emerald-400 hover:text-white border border-emerald-600/50 px-4 py-2 rounded transition">
-                                                 Repair & Optimize All Tables
-                                             </button>
-                                         </div>
-                                     </template>
 
                                      <!-- IncidentSnapshotAgent UI -->
                                      <template x-if="agent === 'IncidentSnapshotAgent' && id === 'snapshots_list'">
@@ -1204,7 +1255,14 @@ if ($file_age > $expiration_time) {
                     danger: false,
                     resolver: null
                 },
+                arbitraryEditor: {
+                    open: false,
+                    path: '',
+                    content: '',
+                    saving: false
+                },
                 init() {
+                    window.diagnoseAppInstance = this;
                     this.fastMode = localStorage.getItem('wpd_fast_mode') === 'true';
                     this.$watch('fastMode', val => {
                         localStorage.setItem('wpd_fast_mode', val ? 'true' : 'false');
@@ -1397,7 +1455,7 @@ if ($file_age > $expiration_time) {
                                             <h3 class="text-rose-500 font-mono font-bold text-sm">Emergency Output: ${logPayload.path} (Last 100 Lines)</h3>
                                             <button onclick="document.getElementById('errorModal').remove()" class="text-slate-400 hover:text-white font-bold">&times;</button>
                                         </div>
-                                        <div class="p-4 overflow-y-auto font-mono text-xs text-slate-300 bg-[#0c0c0c] whitespace-pre-wrap leading-relaxed">${(logPayload.contents || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
+                                        <div class="p-4 overflow-y-auto font-mono text-xs text-slate-300 bg-[#0c0c0c] whitespace-pre-wrap leading-relaxed">${window.diagnoseAppInstance.parseLogContent(logPayload.contents || '')}</div>
                                     </div>
                                 </div>
                             `);
@@ -1551,6 +1609,64 @@ if ($file_age > $expiration_time) {
                     } catch (e) {
                         this.notify('Wipe sequence initiated. Verify server state.', 'info');
                     }
+                },
+                async openArbitraryEditor(path) {
+                    this.arbitraryEditor.path = path;
+                    this.arbitraryEditor.content = 'Loading...';
+                    this.arbitraryEditor.open = true;
+                    this.arbitraryEditor.saving = false;
+                    try {
+                        const pathEncoded = btoa(path);
+                        const response = await fetch(`?token=${this.token}&action=fix&agent=IntegrityRepairAgent&id=read_arbitrary_file:${pathEncoded}&format=json`);
+                        const result = await response.json();
+                        if (result.success && result.data) {
+                            this.arbitraryEditor.content = result.data.content;
+                        } else {
+                            this.notify(result.message || 'Failed to read file.', 'error');
+                            this.arbitraryEditor.open = false;
+                        }
+                    } catch (e) {
+                        this.notify('API error loading file.', 'error');
+                        this.arbitraryEditor.open = false;
+                    }
+                },
+                async saveArbitraryFile() {
+                    this.arbitraryEditor.saving = true;
+                    try {
+                        const pathEncoded = btoa(this.arbitraryEditor.path);
+                        const fd = new FormData();
+                        fd.append('content', this.arbitraryEditor.content);
+                        const response = await fetch(`?token=${this.token}&action=fix&agent=IntegrityRepairAgent&id=save_arbitrary_file:${pathEncoded}&format=json`, {
+                            method: 'POST',
+                            body: fd
+                        });
+                        const result = await response.json();
+                        if (result.success) {
+                            this.notify('File saved successfully.', 'success');
+                            this.arbitraryEditor.open = false;
+                        } else {
+                            this.notify(result.message || 'Failed to save file.', 'error');
+                        }
+                    } catch (e) {
+                        this.notify('API error saving file.', 'error');
+                    } finally {
+                        this.arbitraryEditor.saving = false;
+                    }
+                },
+                parseLogContent(content) {
+                    if (!content) return '';
+                    let escaped = content.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                    const regex1 = /(?:[A-Za-z]:)?[\/\\A-Za-z0-9_\.\-\(\)]+[\/\\](wp-(?:content|includes|admin|config\.php|settings\.php)[\/\\A-Za-z0-9_\.\-\(\)]+\.php)\s+on\s+line\s+(\d+)/gi;
+                    escaped = escaped.replace(regex1, (match, relPath, line) => {
+                        const normPath = relPath.replace(/\\/g, '/');
+                        return `<span class="bg-rose-500/20 text-rose-300 border border-rose-500/30 px-1 py-0.5 rounded cursor-pointer hover:bg-rose-500/40 hover:text-white transition" onclick="window.diagnoseAppInstance.openArbitraryEditor('${normPath}')"><strong>${normPath}</strong> on line ${line}</span>`;
+                    });
+                    const regex2 = /(?:[A-Za-z]:)?[\/\\A-Za-z0-9_\.\-\(\)]+[\/\\](wp-(?:content|includes|admin|config\.php|settings\.php)[\/\\A-Za-z0-9_\.\-\(\)]+\.php):(\d+)/gi;
+                    escaped = escaped.replace(regex2, (match, relPath, line) => {
+                        const normPath = relPath.replace(/\\/g, '/');
+                        return `<span class="bg-rose-500/20 text-rose-300 border border-rose-500/30 px-1 py-0.5 rounded cursor-pointer hover:bg-rose-500/40 hover:text-white transition" onclick="window.diagnoseAppInstance.openArbitraryEditor('${normPath}')"><strong>${normPath}:${line}</strong></span>`;
+                    });
+                    return escaped;
                 }
             }
         }

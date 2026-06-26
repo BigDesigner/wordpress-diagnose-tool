@@ -122,6 +122,19 @@ class IntegrityRepairAgent implements DiagnosticInterface
             return $this->setPhpVersion($version);
         }
 
+        if (str_starts_with($id, 'read_arbitrary_file:')) {
+            $pathEncoded = substr($id, 20);
+            $relPath = base64_decode($pathEncoded);
+            return $this->readArbitraryFile($relPath);
+        }
+
+        if (str_starts_with($id, 'save_arbitrary_file:')) {
+            $pathEncoded = substr($id, 20);
+            $relPath = base64_decode($pathEncoded);
+            $content = $_POST['content'] ?? '';
+            return $this->saveArbitraryFile($relPath, $content);
+        }
+
         return false;
     }
 
@@ -241,5 +254,77 @@ class IntegrityRepairAgent implements DiagnosticInterface
     {
         $baseDir = defined('ABSPATH') ? ABSPATH : dirname(__DIR__, 4) . '/';
         return str_replace('\\', '/', ltrim(str_replace($baseDir, '', $path), '/\\'));
+    }
+
+    private function validateAndResolvePath(string $relPath): ?string
+    {
+        $baseDir = defined('ABSPATH') ? ABSPATH : dirname(__DIR__, 4) . '/';
+        $realBase = realpath($baseDir);
+        if (!$realBase) {
+            return null;
+        }
+
+        $targetPath = $baseDir . ltrim(str_replace('\\', '/', $relPath), '/');
+        $realTarget = realpath($targetPath);
+        
+        if ($realTarget === false) {
+            $parentDir = dirname($targetPath);
+            $realParent = realpath($parentDir);
+            if ($realParent === false) {
+                return null;
+            }
+            if (strpos($realParent, $realBase) !== 0) {
+                return null;
+            }
+            return $targetPath;
+        }
+
+        if (strpos($realTarget, $realBase) !== 0) {
+            return null;
+        }
+
+        return $realTarget;
+    }
+
+    private function readArbitraryFile(string $relPath): bool
+    {
+        $resolved = $this->validateAndResolvePath($relPath);
+        if (!$resolved || !is_file($resolved)) {
+            $this->lastActionResult = ['success' => false, 'message' => 'Invalid file path or file not found.'];
+            return false;
+        }
+
+        $content = @file_get_contents($resolved);
+        if ($content === false) {
+            $this->lastActionResult = ['success' => false, 'message' => 'Failed to read file. Check permissions.'];
+            return false;
+        }
+
+        $this->lastActionResult = [
+            'success' => true,
+            'message' => 'File loaded successfully.',
+            'data' => [
+                'path' => $relPath,
+                'content' => $content
+            ]
+        ];
+        return true;
+    }
+
+    private function saveArbitraryFile(string $relPath, string $content): bool
+    {
+        $resolved = $this->validateAndResolvePath($relPath);
+        if (!$resolved) {
+            $this->lastActionResult = ['success' => false, 'message' => 'Access denied: Path is outside WordPress directory tree.'];
+            return false;
+        }
+
+        if (@file_put_contents($resolved, $content) !== false) {
+            $this->lastActionResult = ['success' => true, 'message' => "File '$relPath' saved successfully."];
+            return true;
+        }
+
+        $this->lastActionResult = ['success' => false, 'message' => "Failed to save file. Check write permissions."];
+        return false;
     }
 }
