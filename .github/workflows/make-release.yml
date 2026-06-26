@@ -32,10 +32,29 @@ jobs:
           cd diagnose
           zip -r ../wp-diagnose-dist.zip .
 
+      - name: Get Version
+        id: get_version
+        run: |
+          VERSION=$(cat VERSION)
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+      - name: Create Git Tag if not exists
+        run: |
+          git fetch --tags
+          if ! git rev-parse "v${{ env.VERSION }}" >/dev/null 2>&1; then
+            echo "Tag v${{ env.VERSION }} does not exist. Creating it."
+            git config --global user.name "github-actions[bot]"
+            git config --global user.email "github-actions[bot]@users.noreply.github.com"
+            git tag "v${{ env.VERSION }}"
+            git push origin "v${{ env.VERSION }}"
+          else
+            echo "Tag v${{ env.VERSION }} already exists."
+          fi
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
-        if: startsWith(github.ref, 'refs/tags/')
         with:
+          tag_name: v${{ env.VERSION }}
           files: |
             wp-diagnose-dist.zip
             diagnose/wp-diagnose-pro.php
