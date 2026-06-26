@@ -1263,7 +1263,10 @@ if ($file_age > $expiration_time) {
                                     </template>
                                     
                                     <!-- Generic Action Buttons -->
-                                    <template x-if="finding.status !== 'OK' && (agent === 'ServerInspector' || agent === 'BootstrapInspector' || agent === 'DBHealth')">
+                                    <template x-if="finding.status !== 'OK' && (
+                                        (agent === 'DBHealth' && id === 'table_fragmentation') ||
+                                        (agent === 'ServerInspector' && (id === 'memory_limit' || id === 'max_execution_time'))
+                                    )">
                                         <div class="flex gap-2">
                                             <button type="button" @click="attemptFix(agent, id)" class="text-[10px] font-bold uppercase tracking-wider bg-emerald-600/20 hover:bg-emerald-600 text-emerald-400 hover:text-white border border-emerald-600/50 px-4 py-2 rounded transition">
                                                 Execute Recovery Routine
