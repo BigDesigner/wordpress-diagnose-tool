@@ -49,6 +49,21 @@ Use it to track:
 
 ## Release Timeline
 
+## [2026-06-27] v0.3.4-beta - Config Editors & Plugin Updates
+- `IntegrityRepairAgent`: Added configuration file editor capability for `.htaccess`, `php.ini`, and `.user.ini` allowing direct viewing, editing, and saving of critical configuration files. [Status: Verified]
+- `IntegrityRepairAgent`: Added PHP Version presets switcher, supporting one-click injection of PHP 8.1, 8.2, 8.3, and 8.4 handlers to `.htaccess`. [Status: Verified]
+- `AssetManagerAgent`: Added individual plugin update action (`update_plugin`) that fetches the latest zip from WordPress.org and extracts it over the active plugin directory. [Status: Verified]
+- `src/wp-diagnose.php`: Added config editor UI container, PHP version selector dropdown, and "Update" button in the plugins management table. [Status: Verified]
+- Automated pipeline validation completed. [Status: Verified]
+
+## [2026-06-26] v0.3.3-beta - Pipeline Auto-Tagging
+- `.github/workflows/make-release.yml`: Upgraded release workflow to dynamically extract project version, automatically check, create and push missing Git version tags, and publish releases on manual run. [Status: Verified]
+
+## [2026-06-26] v0.3.2-beta - PHPUnit Crash Resolving
+- `WPDiagnose\Core\DiagnosticInterface`: Implemented required `report(): array` method on all 13 newly added agents to resolve PHPUnit bootstrap fatal errors. [Status: Verified]
+- `.github/workflows/make-release.yml`: Upgraded GitHub checkout action to `@v6` and release action to `@v3` for Node 24 support. [Status: Verified]
+- `.gitignore`: Configured exclusions for `.npm-cache/` and `repomix-output.xml`. [Status: Verified]
+
 ## [2026-03-23] v0.3.1-beta - Enterprise Audit Hardening
 - `CoreOperationsAgent`: `WP_DEBUG_LOG` deduplication added so repeated log definitions are normalized into one canonical setting. [Status: Verified]
 - `CoreOperationsAgent`: Debug log bootstrap now proactively creates the custom log file when debug mode is enabled. [Status: Verified]

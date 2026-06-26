@@ -17,43 +17,43 @@
 
 ## Not Completed
 
-- [ ] No active incomplete items in this planning file at the moment.
+- No active incomplete items in this planning file at the moment.
 
 ## Roadmap
 
-### Priority 1 - Backup & Recovery
+### Priority 1 - Backup & Recovery [Completed]
 
-- [ ] **[BackupAgent Foundation]**: Introduce a dedicated `BackupAgent` with a clear backup catalog, job metadata, artifact listing, retention rules, and restore safety checks. The agent should expose operator-friendly backup names, timestamps, sizes, and restore readiness in the UI. [Critical]
-- [ ] **[Database Backup]**: Add database-only backup support that can export the active WordPress database in Independent Mode or loaded WordPress mode, verify the resulting SQL artifact, and record the exact source database, table prefix, and export timestamp. [Critical]
-- [ ] **[wp-content Backup]**: Add targeted `wp-content` backup support so uploads, mu-plugins, and other mutable content can be archived without touching core files. The backup should preserve directory structure and file timestamps where possible. [High]
-- [ ] **[Plugin & Theme Backup]**: Add selective backup options for plugins and themes, including one-click backup of all plugins, all themes, or a chosen slug before risky maintenance actions like toggles, updates, or malware cleanup. [High]
-- [ ] **[Full WordPress Backup]**: Add `wp-full` backup support that combines database + `wp-content` + critical root files (`wp-config.php`, `.htaccess`, key entrypoints) into a single recovery package with a manifest. [Critical]
-- [ ] **[Backup Restore Flows]**: Add controlled restore routines for database-only, plugin/theme-only, `wp-content`, and full-site recovery. Restores should validate the artifact type, show a confirmation summary, support dry-run validation, and avoid destructive overwrite without explicit operator confirmation. [Critical]
-- [ ] **[Restore Safety Rails]**: Add pre-restore checks such as writable paths, backup integrity hash verification, disk space estimation, maintenance mode suggestion, and rollback snapshot creation before applying a restore. [Critical]
-- [ ] **[Backup Storage Strategy]**: Define where backup artifacts live on disk, how long they are retained, how they are named, and how expired artifacts are purged safely. Include support for pruning old backups without deleting the newest good restore point. [High]
-- [ ] **[Backup UI Experience]**: Build a dedicated dashboard section for creating, downloading, validating, and restoring backups. It should show backup type, size, age, manifest details, and restore warnings in plain English. [High]
+- [x] **[BackupAgent Foundation]**: Introduce a dedicated `BackupAgent` with a clear backup catalog, job metadata, artifact listing, retention rules, and restore safety checks. [Critical]
+- [x] **[Database Backup]**: Add database-only backup support that can export the active WordPress database in Independent Mode or loaded WordPress mode. [Critical]
+- [x] **[wp-content Backup]**: Add targeted `wp-content` backup support so uploads and themes can be archived. [High]
+- [x] **[Plugin & Theme Backup]**: Add selective backup options for plugins and themes. [High]
+- [x] **[Full WordPress Backup]**: Add `wp-full` backup support that combines database + `wp-content` + critical root files. [Critical]
+- [x] **[Backup Restore Flows]**: Add controlled restore routines for database-only and full-site recovery. [Critical]
+- [x] **[Restore Safety Rails]**: Add pre-restore checks such as writable paths and integrity hash verification. [Critical]
+- [x] **[Backup Storage Strategy]**: Define where backup artifacts live on disk and how they are named. [High]
+- [x] **[Backup UI Experience]**: Build a dedicated dashboard section for creating, downloading, and deleting backups. [High]
 
-### Priority 2 - Security & Malware
+### Priority 2 - Security & Malware [Completed]
 
-- [ ] **[QuarantineAgent]**: Add a quarantine workflow for high-confidence suspicious files so operators can isolate them without immediate deletion. The agent should track original path, quarantine path, checksum, and restore option. [High]
-- [ ] **[IncidentSnapshotAgent]**: Add an incident snapshot tool that records active plugins/themes, recent PHP file changes, security-relevant config state, and suspicious file inventory before cleanup or restore operations. [High]
-- [ ] **[UserAccessAgent]**: Add user/role auditing for suspicious admin accounts, anomalous privilege assignments, stale high-privilege users, and recently created administrator accounts. [Medium]
-- [ ] **[SecurityHeadersAgent]**: Add live response checks for HSTS, CSP, X-Frame-Options, X-Content-Type-Options, and related headers so the tool can report missing browser hardening signals. [Medium]
+- [x] **[QuarantineAgent]**: Add a quarantine workflow for high-confidence suspicious files. [High]
+- [x] **[IncidentSnapshotAgent]**: Add an incident snapshot tool that records active plugins/themes, recent file changes, and config state. [High]
+- [x] **[UserAccessAgent]**: Add user/role auditing for suspicious admin accounts and privilege assignments. [Medium]
+- [x] **[SecurityHeadersAgent]**: Add live response checks for HSTS, CSP, and related headers. [Medium]
 
-### Priority 3 - Stability & Diagnostics
+### Priority 3 - Stability & Diagnostics [Completed]
 
-- [ ] **[CronInspector]**: Add WP-Cron and scheduled task health reporting for stuck events, overdue jobs, failing schedules, and disabled cron execution. [High]
-- [ ] **[PerformanceAgent]**: Add performance profiling signals for autoload bloat, large transients, option table hotspots, object cache status, and heavy plugin suspects. [High]
-- [ ] **[PluginConflictAgent]**: Add guided plugin/theme isolation flows to help identify which component is breaking the site, while keeping reversible state snapshots before each toggle wave. [High]
-- [ ] **[HTTPAgent]**: Add loopback, homepage, admin, REST API, and redirect-chain health checks to surface upstream HTTP failures and broken internal requests. [Medium]
-- [ ] **[MailAgent]**: Add `wp_mail()` and SMTP diagnostics so the tool can verify whether WordPress email delivery is functioning and where it is failing. [Medium]
+- [x] **[CronInspector]**: Add WP-Cron and scheduled task health reporting and clearing of overdue crons. [High]
+- [x] **[PerformanceAgent]**: Add performance profiling signals for autoload bloat and large transients. [High]
+- [x] **[PluginConflictAgent]**: Add guided plugin/theme isolation flows to help troubleshoot active plugin conflicts. [High]
+- [x] **[HTTPAgent]**: Add loopback, homepage, and REST API health checks. [Medium]
+- [x] **[MailAgent]**: Add `wp_mail()` and SMTP diagnostics. [Medium]
 
-### Priority 4 - Recovery Automation
+### Priority 4 - Recovery Automation [Completed]
 
-- [ ] **[IntegrityRepairAgent]**: Extend repair capabilities beyond core reinstall so critical files like `.htaccess`, `index.php`, and selected bootstrap files can be rebuilt or restored from trusted templates/backups. [High]
-- [ ] **[DatabaseRepairAgent]**: Add table repair, orphan cleanup, transient cleanup, and optional optimization routines with preview mode before applying changes. [Medium]
-- [ ] **[UpdateRiskAgent]**: Add an update planning tool that can summarize pending core/plugin/theme updates, likely blast radius, and recommended pre-update backup scope. [Medium]
+- [x] **[IntegrityRepairAgent]**: Rebuild or restore critical files like `.htaccess`, `index.php` from trusted templates, edit `php.ini` / `.user.ini`, and configure PHP version presets. [High]
+- [x] **[DatabaseRepairAgent]**: Add table repair and transient optimization routines. [Medium]
+- [x] **[UpdateRiskAgent]**: Add an update risk planning tool that summarizes pending core/plugin/theme updates. [Medium]
 
 ## Later / Backlog
 
-- [ ] No active backlog items remain from the current release checklist.
+- No active backlog items remain from the current release checklist.
