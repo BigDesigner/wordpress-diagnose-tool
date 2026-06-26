@@ -70,6 +70,8 @@ class CoreOperationsAgent implements DiagnosticInterface
 
         if ($id === 'toggle_wp_debug') {
             return $this->toggleWpDebugSuite();
+        } elseif ($id === 'toggle_wp_debug_display') {
+            return $this->toggleConfig('WP_DEBUG_DISPLAY');
         } elseif ($id === 'toggle_savequeries') {
             return $this->toggleConfig('SAVEQUERIES');
         } elseif ($id === 'toggle_maintenance') {
@@ -81,6 +83,8 @@ class CoreOperationsAgent implements DiagnosticInterface
         } elseif ($id === 'view_error_log') {
             $this->outputErrorLog();
             return true;
+        } elseif ($id === 'test_logging') {
+            return $this->testLogging();
         } elseif (strpos($id, 'reset_admin:') === 0) {
             $username = substr($id, 12);
             return $this->resetPassword($username);
@@ -104,7 +108,7 @@ class CoreOperationsAgent implements DiagnosticInterface
         $configPath = $this->locateWpConfigPath();
         if (!is_file($configPath)) return [];
 
-        $content = (string) file_get_contents($configPath);
+        $content = (string) @file_get_contents($configPath);
         $vars = [];
 
         foreach (['WP_DEBUG', 'WP_DEBUG_DISPLAY', 'WP_DEBUG_LOG', 'SAVEQUERIES', 'WP_ENVIRONMENT_TYPE'] as $constant) {
@@ -129,7 +133,7 @@ class CoreOperationsAgent implements DiagnosticInterface
             return false;
         }
 
-        $content = (string) file_get_contents($configPath);
+        $content = (string) @file_get_contents($configPath);
         $currentDebug = 'false';
         $rawCurrentDebug = $this->extractConfigConstantValue($content, 'WP_DEBUG');
         if ($rawCurrentDebug !== null) {
@@ -212,7 +216,7 @@ class CoreOperationsAgent implements DiagnosticInterface
             return false;
         }
 
-        $content = (string) file_get_contents($configPath);
+        $content = (string) @file_get_contents($configPath);
         $current = strtolower($this->normalizeConfigValueForDisplay($this->extractConfigConstantValue($content, $constant) ?? 'false'));
         $newVal = ($current === 'true') ? 'false' : 'true';
         $updated = $this->upsertConfigConstant($content, $constant, $newVal);
@@ -802,5 +806,77 @@ class CoreOperationsAgent implements DiagnosticInterface
             'directory' => $directory,
             'directory_writable' => $directoryWritable,
         ];
+    }
+
+    private function testLogging(): bool
+    {
+        $configVars = $this->parseWpConfig();
+        $debugLogPath = $this->resolveDebugLogPathFromConfig($configVars);
+
+        // Make sure we have the directory
+        $directory = dirname($debugLogPath);
+        if (!is_dir($directory)) {
+            @mkdir($directory, 0755, true);
+        }
+
+        // 1. Direct write to verify file permissions
+        $timeStr = date('Y-m-d H:i:s');
+        $directMsg = "[{$timeStr}] [WordPress Diagnose Tool] DIRECT TEST: Verifying that we can write directly to this log file." . PHP_EOL;
+        $directWritten = @file_put_contents($debugLogPath, $directMsg, FILE_APPEND | LOCK_EX) !== false;
+
+        // 2. Native error_log() write (using the configured log path)
+        $oldErrorLog = ini_get('error_log');
+        $oldLogErrors = ini_get('log_errors');
+        $oldErrorReporting = error_reporting();
+
+        // Configure ini settings to mimic WordPress debug mode or use active settings
+        @ini_set('log_errors', '1');
+        @ini_set('error_log', $debugLogPath);
+        @error_reporting(E_ALL);
+
+        $nativeMsg = "[WordPress Diagnose Tool] NATIVE TEST: Verifying that native PHP error_log() writes to the configured file.";
+        $nativeWritten = @error_log($nativeMsg);
+
+        // 3. Trigger PHP user warning to see if runtime catches it
+        @trigger_error('[WordPress Diagnose Tool] RUNTIME TEST: Verifying that trigger_error() gets captured in the log.', E_USER_WARNING);
+
+        // Restore original ini settings
+        @ini_set('log_errors', $oldLogErrors);
+        @ini_set('error_log', $oldErrorLog);
+        @error_reporting($oldErrorReporting);
+
+        // Check if file exists and has size
+        clearstatcache(true, $debugLogPath);
+        $fileExists = is_file($debugLogPath);
+        $fileSize = $fileExists ? filesize($debugLogPath) : 0;
+
+        if ($directWritten && $nativeWritten && $fileExists) {
+            $this->lastActionResult = [
+                'success' => true,
+                'message' => "Test logging successful! Log file verified at {$debugLogPath} (Size: {$fileSize} bytes). " .
+                             "Three tests performed: Direct Write, Native error_log(), and trigger_error().",
+                'data' => [
+                    'path' => $debugLogPath,
+                    'size' => $fileSize,
+                    'direct_write' => $directWritten,
+                    'native_error_log' => $nativeWritten,
+                ],
+            ];
+            return true;
+        }
+
+        $this->lastActionResult = [
+            'success' => false,
+            'message' => "Test logging failed. Direct write: " . ($directWritten ? 'OK' : 'FAILED') . 
+                         ", Native error_log: " . ($nativeWritten ? 'OK' : 'FAILED') . 
+                         ", File exists: " . ($fileExists ? 'YES' : 'NO') . " at target path: {$debugLogPath}",
+            'data' => [
+                'path' => $debugLogPath,
+                'direct_write' => $directWritten,
+                'native_error_log' => $nativeWritten,
+                'file_exists' => $fileExists,
+            ],
+        ];
+        return false;
     }
 }

@@ -376,7 +376,7 @@ final class SecurityManager
         $bucketKey = hash('sha256', $clientIp . '|' . $action . '|' . $role);
         $now = time();
 
-        $handle = fopen($path, 'c+');
+        $handle = @fopen($path, 'c+');
         if ($handle === false) {
             return ['allowed' => true, 'retry_after' => null];
         }

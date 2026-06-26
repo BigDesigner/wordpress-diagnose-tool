@@ -42,29 +42,40 @@ class DBHealth implements DiagnosticInterface
 
         global $wpdb;
 
-        // 1. Autoload Size Check
-        $autoloadSize = @$wpdb->get_var("SELECT SUM(LENGTH(option_value)) FROM $wpdb->options WHERE autoload = 'yes'");
-        $sizeMB       = round((int)$autoloadSize / 1024 / 1024, 2);
-
-        $this->results['autoload_size'] = [
-            'status' => $sizeMB > 1.0 ? 'WARN' : 'OK',
-            'info'   => "Total Autoload Size: {$sizeMB} MB (Recommended < 1.0MB)",
-        ];
-
-        // 2. Table Optimization Status
-        $tables     = @$wpdb->get_results('SHOW TABLE STATUS') ?? [];
-        $fragmented = [];
-        foreach ($tables as $table) {
-            if (isset($table->Data_free) && $table->Data_free > 0) {
-                $fragmented[] = $table->Name;
+        try {
+            if (!isset($wpdb) || !is_object($wpdb)) {
+                throw new \RuntimeException('wpdb global object is not initialized or invalid.');
             }
-        }
 
-        $fragCount = count($fragmented);
-        $this->results['table_fragmentation'] = [
-            'status' => $fragCount > 5 ? 'WARN' : 'OK',
-            'info'   => "{$fragCount} tables have overhead. " . ($fragCount > 0 ? 'Optimization recommended.' : 'Clean.'),
-        ];
+            // 1. Autoload Size Check
+            $autoloadSize = $wpdb->get_var("SELECT SUM(LENGTH(option_value)) FROM $wpdb->options WHERE autoload = 'yes'");
+            $sizeMB       = round((int)$autoloadSize / 1024 / 1024, 2);
+
+            $this->results['autoload_size'] = [
+                'status' => $sizeMB > 1.0 ? 'WARN' : 'OK',
+                'info'   => "Total Autoload Size: {$sizeMB} MB (Recommended < 1.0MB)",
+            ];
+
+            // 2. Table Optimization Status
+            $tables     = $wpdb->get_results('SHOW TABLE STATUS') ?? [];
+            $fragmented = [];
+            foreach ($tables as $table) {
+                if (isset($table->Data_free) && $table->Data_free > 0) {
+                    $fragmented[] = $table->Name;
+                }
+            }
+
+            $fragCount = count($fragmented);
+            $this->results['table_fragmentation'] = [
+                'status' => $fragCount > 5 ? 'WARN' : 'OK',
+                'info'   => "{$fragCount} tables have overhead. " . ($fragCount > 0 ? 'Optimization recommended.' : 'Clean.'),
+            ];
+        } catch (\Throwable $e) {
+            $this->results['db_status'] = [
+                'status' => 'ERROR',
+                'info'   => 'Database query failed: ' . $e->getMessage(),
+            ];
+        }
 
         error_reporting($prevReporting); // Restore original error level
         return $this->results;
@@ -76,13 +87,20 @@ class DBHealth implements DiagnosticInterface
         global $wpdb;
 
         if ($id === 'table_fragmentation') {
-            $tables = $wpdb->get_results("SHOW TABLE STATUS");
-            foreach ($tables as $table) {
-                if ($table->Data_free > 0) {
-                    $wpdb->query("OPTIMIZE TABLE {$table->Name}");
+            try {
+                if (!isset($wpdb) || !is_object($wpdb)) {
+                    return false;
                 }
+                $tables = $wpdb->get_results("SHOW TABLE STATUS");
+                foreach ($tables as $table) {
+                    if (isset($table->Data_free) && $table->Data_free > 0) {
+                        $wpdb->query("OPTIMIZE TABLE {$table->Name}");
+                    }
+                }
+                return true;
+            } catch (\Throwable $e) {
+                return false;
             }
-            return true;
         }
 
         return false;

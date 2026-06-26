@@ -27,21 +27,43 @@ class IntegrityRepairAgent implements DiagnosticInterface
 
         // 1. Audit .htaccess
         $htaccessPath = $baseDir . '.htaccess';
+        $hasBackup = false;
+        $backupName = '';
+        foreach (['.htaccess_old', '.htaccess.bak', '.htaccess.disabled', '.htaccess-disabled'] as $backupFile) {
+            if (is_file($baseDir . $backupFile)) {
+                $hasBackup = true;
+                $backupName = $backupFile;
+                break;
+            }
+        }
+
         if (is_file($htaccessPath)) {
-            $content = (string)file_get_contents($htaccessPath);
+            $content = (string)@file_get_contents($htaccessPath);
             $isStandard = str_contains($content, 'RewriteRule . /index.php [L]') || str_contains($content, 'RewriteRule ^index\.php$ - [L]');
             $isSuspicious = preg_match('/(eval|base64_decode|gzinflate|auto_prepend_file|auto_append_file)/i', $content);
+            $hasPhpHandler = str_contains($content, 'PHP Handler') || preg_match('/SetHandler/i', $content);
+            
+            if ($isSuspicious) {
+                $status = 'ERROR';
+                $info = 'Suspicious PHP direct execution patterns detected in .htaccess.';
+            } elseif ($hasPhpHandler) {
+                $status = 'WARN';
+                $info = 'PHP Version Handler block detected in .htaccess. If the site returned a 500 error after changing the PHP version, this handler might be invalid or unsupported by your host.';
+            } else {
+                $status = $isStandard ? 'OK' : 'WARN';
+                $info = $isStandard ? '.htaccess file conforms to WordPress standards.' : '.htaccess exists but deviates from standard WordPress rewrite rules.';
+            }
             
             $this->results['htaccess_integrity'] = [
-                'status' => ($isSuspicious ? 'ERROR' : ($isStandard ? 'OK' : 'WARN')),
-                'info' => $isSuspicious 
-                    ? 'Suspicious PHP direct execution patterns detected in .htaccess.' 
-                    : ($isStandard ? '.htaccess file conforms to WordPress standards.' : '.htaccess exists but deviates from standard WordPress rewrite rules.')
+                'status' => $status,
+                'info' => $info
             ];
         } else {
             $this->results['htaccess_integrity'] = [
                 'status' => 'WARN',
-                'info' => '.htaccess file is missing.'
+                'info' => $hasBackup 
+                    ? "Active .htaccess is missing, but a backup was detected: '{$backupName}'. You can restore it (which will also automatically strip any problematic PHP handlers)."
+                    : '.htaccess file is missing.'
             ];
         }
 
@@ -107,6 +129,10 @@ class IntegrityRepairAgent implements DiagnosticInterface
             return $this->repairHtaccess();
         }
 
+        if ($id === 'remove_php_handler') {
+            return $this->removePhpHandler();
+        }
+
         if ($id === 'repair_index_php') {
             return $this->repairIndexPhp();
         }
@@ -115,11 +141,6 @@ class IntegrityRepairAgent implements DiagnosticInterface
             $filename = substr($id, 10);
             $content = $_POST['content'] ?? '';
             return $this->saveFile($filename, $content);
-        }
-
-        if (str_starts_with($id, 'set_php_version:')) {
-            $version = substr($id, 16);
-            return $this->setPhpVersion($version);
         }
 
         if (str_starts_with($id, 'read_arbitrary_file:')) {
@@ -217,39 +238,6 @@ class IntegrityRepairAgent implements DiagnosticInterface
         return false;
     }
 
-    private function setPhpVersion(string $version): bool
-    {
-        $baseDir = defined('ABSPATH') ? ABSPATH : dirname(__DIR__, 4) . '/';
-        $htaccessPath = $baseDir . '.htaccess';
-        $content = is_file($htaccessPath) ? (string)@file_get_contents($htaccessPath) : '';
-
-        // Strip any existing PHP handler blocks to prevent duplication
-        $content = preg_replace('/# BEGIN PHP Handler.*?# END PHP Handler/s', '', $content);
-        
-        // Standard PHP Handler block for cPanel / LiteSpeed / Apache
-        $handler = "\n# BEGIN PHP Handler\n";
-        $handler .= "<IfModule mod_substitute.c>\n";
-        $handler .= "SubstituteMaxLineLength 10M\n";
-        $handler .= "</IfModule>\n";
-        $handler .= "<FilesMatch \"\\.(php|php8|phtml)$\">\n";
-        
-        $verClean = str_replace('.', '', $version);
-        $handler .= "  SetHandler application/x-httpd-ea-php{$verClean}\n";
-        
-        $handler .= "</FilesMatch>\n";
-        $handler .= "# END PHP Handler\n";
-
-        $content = rtrim($content) . "\n" . $handler;
-
-        if (@file_put_contents($htaccessPath, $content) !== false) {
-            $this->lastActionResult = ['success' => true, 'message' => "PHP version handler for PHP {$version} was appended to .htaccess successfully."];
-            return true;
-        }
-
-        $this->lastActionResult = ['success' => false, 'message' => 'Failed to write PHP version handler to .htaccess.'];
-        return false;
-    }
-
     private function relativePath(string $path): string
     {
         $baseDir = defined('ABSPATH') ? ABSPATH : dirname(__DIR__, 4) . '/';
@@ -325,6 +313,37 @@ class IntegrityRepairAgent implements DiagnosticInterface
         }
 
         $this->lastActionResult = ['success' => false, 'message' => "Failed to save file. Check write permissions."];
+        return false;
+    }
+
+    private function removePhpHandler(): bool
+    {
+        $baseDir = defined('ABSPATH') ? ABSPATH : dirname(__DIR__, 4) . '/';
+        $htaccessPath = $baseDir . '.htaccess';
+        
+        // If .htaccess is missing, check if a backup exists and restore it first
+        if (!is_file($htaccessPath)) {
+            foreach (['.htaccess_old', '.htaccess.bak', '.htaccess.disabled', '.htaccess-disabled'] as $backupFile) {
+                if (is_file($baseDir . $backupFile)) {
+                    if (@copy($baseDir . $backupFile, $htaccessPath)) {
+                        break;
+                    }
+                }
+            }
+        }
+        
+        if (is_file($htaccessPath)) {
+            $content = (string)@file_get_contents($htaccessPath);
+            $cleanContent = preg_replace('/# BEGIN PHP Handler.*?# END PHP Handler/s', '', $content);
+            $cleanContent = preg_replace('/<FilesMatch.*?>\s*SetHandler.*?\s*<\/FilesMatch>/si', '', $cleanContent);
+            
+            if (@file_put_contents($htaccessPath, trim($cleanContent) . "\n") !== false) {
+                $this->lastActionResult = ['success' => true, 'message' => 'PHP handler directives have been successfully removed from .htaccess.'];
+                return true;
+            }
+        }
+        
+        $this->lastActionResult = ['success' => false, 'message' => 'Could not locate or modify .htaccess to strip PHP handlers.'];
         return false;
     }
 }

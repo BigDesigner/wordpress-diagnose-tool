@@ -94,7 +94,10 @@ class BootstrapInspector implements DiagnosticInterface
      */
     private function extractDbConfig(): void
     {
-        $content = file_get_contents($this->configPath);
+        $content = @file_get_contents($this->configPath);
+        if ($content === false) {
+            $content = '';
+        }
         
         // Match constants define('DB_NAME', 'value');
         $pattern = "/define\s*\(\s*['\"](.+?)['\"]\s*,\s*['\"](.*?)['\"]\s*\)\s*;/";

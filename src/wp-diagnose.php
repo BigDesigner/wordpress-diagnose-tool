@@ -244,20 +244,24 @@ $DB_ERR = '';
 // ALWAYS parse wp-config.php for direct SQL access (bypassing high-level WP ops)
 $config_path = wpd_find_config_path();
 if ($config_path && is_file($config_path)) {
-    $cfg = file_get_contents($config_path);
+    $cfg = @file_get_contents($config_path);
     
-    $db_host = preg_match("/define\s*\(\s*['\"]DB_HOST['\"]\s*,\s*['\"](.*?)['\"]\s*\)/i", $cfg, $m) ? $m[1] : 'localhost';
-    $db_name = preg_match("/define\s*\(\s*['\"]DB_NAME['\"]\s*,\s*['\"](.*?)['\"]\s*\)/i", $cfg, $m) ? $m[1] : '';
-    $db_user = preg_match("/define\s*\(\s*['\"]DB_USER['\"]\s*,\s*['\"](.*?)['\"]\s*\)/i", $cfg, $m) ? $m[1] : '';
-    $db_pass = preg_match("/define\s*\(\s*['\"]DB_PASSWORD['\"]\s*,\s*['\"](.*?)['\"]\s*\)/i", $cfg, $m) ? $m[1] : '';
-    $table_prefix = preg_match("/\\\$table_prefix\s*=\s*['\"](.*?)['\"]/i", $cfg, $m) ? $m[1] : 'wp_';
-    
-    if ($db_name && $db_user) {
-        try {
-            $DB = new \WPD_DB($db_host, $db_user, $db_pass, $db_name, $table_prefix);
-        } catch (\Throwable $e) {
-            $DB_ERR = $e->getMessage();
+    if (is_string($cfg)) {
+        $db_host = preg_match("/define\s*\(\s*['\"]DB_HOST['\"]\s*,\s*['\"](.*?)['\"]\s*\)/i", $cfg, $m) ? $m[1] : 'localhost';
+        $db_name = preg_match("/define\s*\(\s*['\"]DB_NAME['\"]\s*,\s*['\"](.*?)['\"]\s*\)/i", $cfg, $m) ? $m[1] : '';
+        $db_user = preg_match("/define\s*\(\s*['\"]DB_USER['\"]\s*,\s*['\"](.*?)['\"]\s*\)/i", $cfg, $m) ? $m[1] : '';
+        $db_pass = preg_match("/define\s*\(\s*['\"]DB_PASSWORD['\"]\s*,\s*['\"](.*?)['\"]\s*\)/i", $cfg, $m) ? $m[1] : '';
+        $table_prefix = preg_match("/\\\$table_prefix\s*=\s*['\"](.*?)['\"]/i", $cfg, $m) ? $m[1] : 'wp_';
+        
+        if ($db_name && $db_user) {
+            try {
+                $DB = new \WPD_DB($db_host, $db_user, $db_pass, $db_name, $table_prefix);
+            } catch (\Throwable $e) {
+                $DB_ERR = $e->getMessage();
+            }
         }
+    } else {
+        $DB_ERR = 'Permission Denied: Could not read wp-config.php file contents.';
     }
 }
 
@@ -1014,6 +1018,11 @@ if ($file_age > $expiration_time) {
                                                           Re-create Standard .htaccess
                                                       </button>
                                                   </template>
+                                                  <template x-if="id === 'htaccess_integrity' && (finding.info && (finding.info.indexOf('PHP') !== -1 || finding.info.indexOf('backup') !== -1))">
+                                                      <button type="button" @click="attemptFix('IntegrityRepairAgent', 'remove_php_handler')" class="text-[10px] font-bold uppercase tracking-wider bg-amber-600/20 hover:bg-amber-600 text-amber-400 hover:text-white border border-amber-600/50 px-4 py-2 rounded transition">
+                                                          Strip PHP Handlers / Restore Backup
+                                                      </button>
+                                                  </template>
                                                   <template x-if="id === 'index_php_integrity' && finding.status !== 'OK'">
                                                       <button type="button" @click="attemptFix('IntegrityRepairAgent', 'repair_index_php')" class="text-[10px] font-bold uppercase tracking-wider bg-rose-600/20 hover:bg-rose-600 text-rose-400 hover:text-white border border-rose-600/50 px-4 py-2 rounded transition">
                                                           Restore Standard index.php
@@ -1022,32 +1031,18 @@ if ($file_age > $expiration_time) {
                                               </div>
                                               
                                               <!-- Config Files Direct Editor Panel -->
-                                              <template x-if="id === 'config_files'">
-                                                  <div x-data="{ activeEditorFile: 'htaccess', editorContent: '', phpVersionToSet: '8.2' }" 
-                                                       x-init="editorContent = (finding.data && finding.data[activeEditorFile]) ? finding.data[activeEditorFile].content : ''; $watch('activeEditorFile', val => { editorContent = (finding.data && finding.data[val]) ? finding.data[val].content : ''; })" 
-                                                       class="space-y-4 p-4 bg-slate-900/60 border border-slate-700/50 rounded-lg">
-                                                      
-                                                      <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-slate-800">
-                                                          <div>
-                                                              <h4 class="text-xs font-bold text-slate-200 uppercase tracking-wider">Configuration File Editor</h4>
-                                                              <p class="text-[10px] text-slate-400">Directly edit configuration files or set the PHP version.</p>
-                                                          </div>
-                                                          
-                                                          <!-- PHP Version Presets Selector -->
-                                                          <div class="flex items-center gap-2">
-                                                              <span class="text-[10px] text-slate-400">PHP Version:</span>
-                                                              <select x-model="phpVersionToSet" class="bg-slate-800 border border-slate-700 rounded text-xs px-2 py-1 text-slate-300 focus:outline-none focus:border-amber-500">
-                                                                  <option value="8.1">PHP 8.1</option>
-                                                                  <option value="8.2">PHP 8.2</option>
-                                                                  <option value="8.3">PHP 8.3</option>
-                                                                  <option value="8.4">PHP 8.4</option>
-                                                              </select>
-                                                              <button type="button" @click="attemptFix('IntegrityRepairAgent', 'set_php_version:' + phpVersionToSet)" class="cursor-pointer text-[10px] font-bold uppercase tracking-wider bg-amber-600/20 hover:bg-amber-600 text-amber-400 hover:text-white border border-amber-600/50 px-3 py-1.5 rounded transition">
-                                                                  Set Version
-                                                              </button>
-                                                          </div>
-                                                      </div>
-
+                                               <template x-if="id === 'config_files'">
+                                                   <div x-data="{ activeEditorFile: 'htaccess', editorContent: '' }" 
+                                                        x-init="editorContent = (finding.data && finding.data[activeEditorFile]) ? finding.data[activeEditorFile].content : ''; $watch('activeEditorFile', val => { editorContent = (finding.data && finding.data[val]) ? finding.data[val].content : ''; })" 
+                                                        class="space-y-4 p-4 bg-slate-900/60 border border-slate-700/50 rounded-lg">
+                                                       
+                                                       <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-slate-800">
+                                                           <div>
+                                                               <h4 class="text-xs font-bold text-slate-200 uppercase tracking-wider">Configuration File Editor</h4>
+                                                               <p class="text-[10px] text-slate-400">Directly edit configuration files.</p>
+                                                           </div>
+                                                       </div>
+                                                       
                                                       <!-- File Selector Tabs -->
                                                       <div class="flex gap-2">
                                                           <template x-for="(fileData, fileKey) in finding.data" :key="fileKey">
@@ -1229,6 +1224,9 @@ if ($file_age > $expiration_time) {
                                                                             <template x-if="k === 'WP_DEBUG'">
                                                                                 <button type="button" @click.prevent.stop="triggerCoreAction(agent, 'toggle_wp_debug')" class="relative z-10 cursor-pointer px-2 py-1 bg-amber-600/20 text-amber-400 border border-amber-600/50 rounded text-[9px] uppercase font-bold hover:bg-amber-600 hover:text-white transition">Toggle</button>
                                                                             </template>
+                                                                            <template x-if="k === 'WP_DEBUG_DISPLAY'">
+                                                                                <button type="button" @click.prevent.stop="triggerCoreAction(agent, 'toggle_wp_debug_display')" class="relative z-10 cursor-pointer px-2 py-1 bg-amber-600/20 text-amber-400 border border-amber-600/50 rounded text-[9px] uppercase font-bold hover:bg-amber-600 hover:text-white transition">Toggle</button>
+                                                                            </template>
                                                                             <template x-if="k === 'SAVEQUERIES'">
                                                                                 <button type="button" @click.prevent.stop="triggerCoreAction(agent, 'toggle_savequeries')" class="relative z-10 cursor-pointer px-2 py-1 bg-amber-600/20 text-amber-400 border border-amber-600/50 rounded text-[9px] uppercase font-bold hover:bg-amber-600 hover:text-white transition">Toggle</button>
                                                                             </template>
@@ -1254,7 +1252,10 @@ if ($file_age > $expiration_time) {
                                                     <!-- Error Log explicitly added to operations -->
                                                     <div x-show="id==='god_mode_tools'" class="flex items-center justify-between p-2 rounded bg-slate-800/80 border border-slate-700 group hover:border-rose-500/50 transition">
                                                         <div class="text-xs font-mono font-bold text-rose-300">EMERGENCY_LOG</div>
-                                                        <button type="button" @click.prevent.stop="showErrorLog(agent)" class="relative z-10 cursor-pointer text-rose-400 hover:text-white px-2 py-0.5 rounded border border-rose-400/30 hover:bg-rose-500/20 text-[10px] uppercase font-bold text-center">View .log</button>
+                                                        <div class="flex items-center gap-2">
+                                                            <button type="button" @click.prevent.stop="triggerCoreAction(agent, 'test_logging')" class="relative z-10 cursor-pointer text-amber-400 hover:text-white px-2 py-0.5 rounded border border-amber-400/30 hover:bg-amber-500/20 text-[10px] uppercase font-bold text-center">Test Log</button>
+                                                            <button type="button" @click.prevent.stop="showErrorLog(agent)" class="relative z-10 cursor-pointer text-rose-400 hover:text-white px-2 py-0.5 rounded border border-rose-400/30 hover:bg-rose-500/20 text-[10px] uppercase font-bold text-center">View .log</button>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </template>
