@@ -130,7 +130,7 @@ class AssetManagerAgent implements DiagnosticInterface
                                 'name'   => $pluginName,
                                 'active' => in_array($relPath, $activePlugins, true),
                                 'version' => $pluginVersion,
-                                'update_version' => $updateList[$relPath] ?? null,
+                                'update_version' => (isset($updateList[$relPath]) && version_compare($pluginVersion, $updateList[$relPath], '<')) ? $updateList[$relPath] : null,
                             ];
                         }
                     }
@@ -195,7 +195,7 @@ class AssetManagerAgent implements DiagnosticInterface
                     'name'   => $themeName,
                     'active' => ($currentStylesheet === $slug || ($currentStylesheet === '' && $currentTemplate === $slug)),
                     'version' => $themeVersion,
-                    'update_version' => $updateList[$slug] ?? null,
+                    'update_version' => (isset($updateList[$slug]) && version_compare($themeVersion, $updateList[$slug], '<')) ? $updateList[$slug] : null,
                 ];
             }
         }

@@ -133,7 +133,12 @@ class BackupAgent implements DiagnosticInterface
 
         $dbConnection = $this->getDatabaseConnection();
         if (!$dbConnection) {
-            $this->lastActionResult = ['success' => false, 'message' => 'No active database connection available.'];
+            global $DB_ERR;
+            $errMsg = 'No active database connection available.';
+            if (!empty($DB_ERR)) {
+                $errMsg .= ' Connection error: ' . $DB_ERR;
+            }
+            $this->lastActionResult = ['success' => false, 'message' => $errMsg];
             return false;
         }
 

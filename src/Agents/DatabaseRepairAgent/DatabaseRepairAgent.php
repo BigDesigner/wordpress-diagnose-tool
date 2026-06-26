@@ -32,9 +32,14 @@ class DatabaseRepairAgent implements DiagnosticInterface
 
         $dbConnection = $this->getDatabaseConnection();
         if (!$dbConnection) {
+            global $DB_ERR;
+            $errMsg = 'No active database connection. Repair routines unavailable.';
+            if (!empty($DB_ERR)) {
+                $errMsg .= ' Error: ' . $DB_ERR;
+            }
             $this->results['database_repair_status'] = [
                 'status' => 'WARN',
-                'info' => 'No active database connection. Repair routines unavailable.'
+                'info' => $errMsg
             ];
             return $this->results;
         }
@@ -210,7 +215,12 @@ class DatabaseRepairAgent implements DiagnosticInterface
 
         $dbConnection = $this->getDatabaseConnection();
         if (!$dbConnection) {
-            $this->lastActionResult = ['success' => false, 'message' => 'No database connection.'];
+            global $DB_ERR;
+            $errMsg = 'No database connection.';
+            if (!empty($DB_ERR)) {
+                $errMsg .= ' Error: ' . $DB_ERR;
+            }
+            $this->lastActionResult = ['success' => false, 'message' => $errMsg];
             return false;
         }
 

@@ -148,7 +148,18 @@ class WPD_DB
     public $prefix;
     function __construct($h, $u, $p, $d, $pref)
     {
-        $this->mysqli = @new mysqli($h, $u, $p, $d);
+        $host = $h;
+        $port = null;
+        $socket = null;
+        if (strpos($host, ':') !== false) {
+            list($host, $port_or_socket) = explode(':', $host, 2);
+            if (is_numeric($port_or_socket)) {
+                $port = (int) $port_or_socket;
+            } else {
+                $socket = $port_or_socket;
+            }
+        }
+        $this->mysqli = @new mysqli($host, $u, $p, $d, $port, $socket);
         if ($this->mysqli->connect_errno)
             throw new \Exception($this->mysqli->connect_error);
         $this->mysqli->set_charset('utf8mb4');
@@ -229,10 +240,10 @@ $config_path = wpd_find_config_path();
 if ($config_path && is_file($config_path)) {
     $cfg = file_get_contents($config_path);
     
-    $db_host = preg_match("/define\(\s*['\"]DB_HOST['\"]\s*,\s*['\"](.*?)['\"]\s*\)/i", $cfg, $m) ? $m[1] : 'localhost';
-    $db_name = preg_match("/define\(\s*['\"]DB_NAME['\"]\s*,\s*['\"](.*?)['\"]\s*\)/i", $cfg, $m) ? $m[1] : '';
-    $db_user = preg_match("/define\(\s*['\"]DB_USER['\"]\s*,\s*['\"](.*?)['\"]\s*\)/i", $cfg, $m) ? $m[1] : '';
-    $db_pass = preg_match("/define\(\s*['\"]DB_PASSWORD['\"]\s*,\s*['\"](.*?)['\"]\s*\)/i", $cfg, $m) ? $m[1] : '';
+    $db_host = preg_match("/define\s*\(\s*['\"]DB_HOST['\"]\s*,\s*['\"](.*?)['\"]\s*\)/i", $cfg, $m) ? $m[1] : 'localhost';
+    $db_name = preg_match("/define\s*\(\s*['\"]DB_NAME['\"]\s*,\s*['\"](.*?)['\"]\s*\)/i", $cfg, $m) ? $m[1] : '';
+    $db_user = preg_match("/define\s*\(\s*['\"]DB_USER['\"]\s*,\s*['\"](.*?)['\"]\s*\)/i", $cfg, $m) ? $m[1] : '';
+    $db_pass = preg_match("/define\s*\(\s*['\"]DB_PASSWORD['\"]\s*,\s*['\"](.*?)['\"]\s*\)/i", $cfg, $m) ? $m[1] : '';
     $table_prefix = preg_match("/\\\$table_prefix\s*=\s*['\"](.*?)['\"]/i", $cfg, $m) ? $m[1] : 'wp_';
     
     if ($db_name && $db_user) {
@@ -374,6 +385,35 @@ if ($is_json || isset($_GET['action'])) {
                 header('Content-Disposition: attachment; filename="wp-diagnose-report-' . time() . '.json"');
                 echo json_encode($ai_report, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
                 exit;
+            } elseif ($_GET['action'] === 'download_backup') {
+                $filename = $_GET['file'] ?? '';
+                $filename = basename($filename);
+                
+                $baseDir = defined('ABSPATH') ? ABSPATH : dirname(__FILE__) . '/';
+                $backupDir = rtrim($baseDir, '/\\') . '/wp-content/uploads/wp-diagnose-backups';
+                $filePath = $backupDir . '/' . $filename;
+                
+                if ($filename && is_file($filePath)) {
+                    wpd_log_action('DOWNLOAD_BACKUP', "File: $filename");
+                    while (ob_get_level()) ob_end_clean();
+                    
+                    header('Content-Description: File Transfer');
+                    header('Content-Type: application/octet-stream');
+                    header('Content-Disposition: attachment; filename="' . $filename . '"');
+                    header('Expires: 0');
+                    header('Cache-Control: must-revalidate');
+                    header('Pragma: public');
+                    header('Content-Length: ' . filesize($filePath));
+                    
+                    flush();
+                    readfile($filePath);
+                    exit;
+                } else {
+                    while (ob_get_level()) ob_end_clean();
+                    header('HTTP/1.0 404 Not Found');
+                    echo 'Backup file not found or invalid filename.';
+                    exit;
+                }
             }
 
             if ($is_json) {
@@ -807,7 +847,12 @@ if ($file_age > $expiration_time) {
                                                          <tbody class="divide-y divide-slate-800">
                                                              <template x-for="backup in finding.data" :key="backup.filename">
                                                                  <tr class="hover:bg-slate-800/40">
-                                                                     <td class="px-4 py-2 font-mono text-sky-400" x-text="backup.filename"></td>
+                                                                     <td class="px-4 py-2 font-mono text-sky-400">
+                                                                         <a :href="'?token=' + token + '&action=download_backup&file=' + encodeURIComponent(backup.filename)" class="hover:underline hover:text-sky-300 flex items-center gap-1.5" download>
+                                                                             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                                                                             <span x-text="backup.filename"></span>
+                                                                         </a>
+                                                                     </td>
                                                                      <td class="px-4 py-2" x-text="backup.type"></td>
                                                                      <td class="px-4 py-2" x-text="backup.size"></td>
                                                                      <td class="px-4 py-2" x-text="backup.created_at"></td>
