@@ -65,6 +65,32 @@ class IntegrityRepairAgent implements DiagnosticInterface
             ];
         }
 
+        // 3. Configuration Files & PHP Version Switching
+        $phpIniPath = $baseDir . 'php.ini';
+        $userIniPath = $baseDir . '.user.ini';
+
+        $this->results['config_files'] = [
+            'status' => 'OK',
+            'info' => 'Configuration files and PHP settings.',
+            'data' => [
+                'htaccess' => [
+                    'path' => $this->relativePath($htaccessPath),
+                    'exists' => is_file($htaccessPath),
+                    'content' => is_file($htaccessPath) ? (string)@file_get_contents($htaccessPath) : '',
+                ],
+                'php_ini' => [
+                    'path' => $this->relativePath($phpIniPath),
+                    'exists' => is_file($phpIniPath),
+                    'content' => is_file($phpIniPath) ? (string)@file_get_contents($phpIniPath) : '',
+                ],
+                'user_ini' => [
+                    'path' => $this->relativePath($userIniPath),
+                    'exists' => is_file($userIniPath),
+                    'content' => is_file($userIniPath) ? (string)@file_get_contents($userIniPath) : '',
+                ]
+            ]
+        ];
+
         return $this->results;
     }
 
@@ -83,6 +109,17 @@ class IntegrityRepairAgent implements DiagnosticInterface
 
         if ($id === 'repair_index_php') {
             return $this->repairIndexPhp();
+        }
+
+        if (str_starts_with($id, 'save_file:')) {
+            $filename = substr($id, 10);
+            $content = $_POST['content'] ?? '';
+            return $this->saveFile($filename, $content);
+        }
+
+        if (str_starts_with($id, 'set_php_version:')) {
+            $version = substr($id, 16);
+            return $this->setPhpVersion($version);
         }
 
         return false;
@@ -141,5 +178,68 @@ class IntegrityRepairAgent implements DiagnosticInterface
 
         $this->lastActionResult = ['success' => false, 'message' => 'Failed to restore index.php. Check permissions.'];
         return false;
+    }
+
+    private function saveFile(string $fileType, string $content): bool
+    {
+        $baseDir = defined('ABSPATH') ? ABSPATH : dirname(__DIR__, 4) . '/';
+        
+        if ($fileType === 'htaccess') {
+            $filePath = $baseDir . '.htaccess';
+        } elseif ($fileType === 'php_ini') {
+            $filePath = $baseDir . 'php.ini';
+        } elseif ($fileType === 'user_ini') {
+            $filePath = $baseDir . '.user.ini';
+        } else {
+            $this->lastActionResult = ['success' => false, 'message' => 'Invalid file selection.'];
+            return false;
+        }
+
+        if (file_put_contents($filePath, $content) !== false) {
+            $this->lastActionResult = ['success' => true, 'message' => "File '$fileType' saved successfully."];
+            return true;
+        }
+
+        $this->lastActionResult = ['success' => false, 'message' => "Failed to save file '$fileType'. Check write permissions."];
+        return false;
+    }
+
+    private function setPhpVersion(string $version): bool
+    {
+        $baseDir = defined('ABSPATH') ? ABSPATH : dirname(__DIR__, 4) . '/';
+        $htaccessPath = $baseDir . '.htaccess';
+        $content = is_file($htaccessPath) ? (string)@file_get_contents($htaccessPath) : '';
+
+        // Strip any existing PHP handler blocks to prevent duplication
+        $content = preg_replace('/# BEGIN PHP Handler.*?# END PHP Handler/s', '', $content);
+        
+        // Standard PHP Handler block for cPanel / LiteSpeed / Apache
+        $handler = "\n# BEGIN PHP Handler\n";
+        $handler .= "<IfModule mod_substitute.c>\n";
+        $handler .= "SubstituteMaxLineLength 10M\n";
+        $handler .= "</IfModule>\n";
+        $handler .= "<FilesMatch \"\\.(php|php8|phtml)$\">\n";
+        
+        $verClean = str_replace('.', '', $version);
+        $handler .= "  SetHandler application/x-httpd-ea-php{$verClean}\n";
+        
+        $handler .= "</FilesMatch>\n";
+        $handler .= "# END PHP Handler\n";
+
+        $content = rtrim($content) . "\n" . $handler;
+
+        if (@file_put_contents($htaccessPath, $content) !== false) {
+            $this->lastActionResult = ['success' => true, 'message' => "PHP version handler for PHP {$version} was appended to .htaccess successfully."];
+            return true;
+        }
+
+        $this->lastActionResult = ['success' => false, 'message' => 'Failed to write PHP version handler to .htaccess.'];
+        return false;
+    }
+
+    private function relativePath(string $path): string
+    {
+        $baseDir = defined('ABSPATH') ? ABSPATH : dirname(__DIR__, 4) . '/';
+        return str_replace('\\', '/', ltrim(str_replace($baseDir, '', $path), '/\\'));
     }
 }

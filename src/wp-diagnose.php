@@ -830,21 +830,80 @@ if ($file_age > $expiration_time) {
                                          </div>
                                      </template>
 
-                                     <!-- IntegrityRepairAgent UI -->
-                                     <template x-if="agent === 'IntegrityRepairAgent'">
-                                         <div class="flex gap-2 mb-4">
-                                             <template x-if="id === 'htaccess_integrity' && finding.status !== 'OK'">
-                                                 <button type="button" @click="attemptFix('IntegrityRepairAgent', 'repair_htaccess')" class="text-[10px] font-bold uppercase tracking-wider bg-rose-600/20 hover:bg-rose-600 text-rose-400 hover:text-white border border-rose-600/50 px-4 py-2 rounded transition">
-                                                     Re-create Standard .htaccess
-                                                 </button>
-                                             </template>
-                                             <template x-if="id === 'index_php_integrity' && finding.status !== 'OK'">
-                                                 <button type="button" @click="attemptFix('IntegrityRepairAgent', 'repair_index_php')" class="text-[10px] font-bold uppercase tracking-wider bg-rose-600/20 hover:bg-rose-600 text-rose-400 hover:text-white border border-rose-600/50 px-4 py-2 rounded transition">
-                                                     Restore Standard index.php
-                                                 </button>
-                                             </template>
-                                         </div>
-                                     </template>
+                                      <!-- IntegrityRepairAgent UI -->
+                                      <template x-if="agent === 'IntegrityRepairAgent'">
+                                          <div class="space-y-4 mb-4">
+                                              <div class="flex gap-2">
+                                                  <template x-if="id === 'htaccess_integrity' && finding.status !== 'OK'">
+                                                      <button type="button" @click="attemptFix('IntegrityRepairAgent', 'repair_htaccess')" class="text-[10px] font-bold uppercase tracking-wider bg-rose-600/20 hover:bg-rose-600 text-rose-400 hover:text-white border border-rose-600/50 px-4 py-2 rounded transition">
+                                                          Re-create Standard .htaccess
+                                                      </button>
+                                                  </template>
+                                                  <template x-if="id === 'index_php_integrity' && finding.status !== 'OK'">
+                                                      <button type="button" @click="attemptFix('IntegrityRepairAgent', 'repair_index_php')" class="text-[10px] font-bold uppercase tracking-wider bg-rose-600/20 hover:bg-rose-600 text-rose-400 hover:text-white border border-rose-600/50 px-4 py-2 rounded transition">
+                                                          Restore Standard index.php
+                                                      </button>
+                                                  </template>
+                                              </div>
+                                              
+                                              <!-- Config Files Direct Editor Panel -->
+                                              <template x-if="id === 'config_files'">
+                                                  <div x-data="{ activeEditorFile: 'htaccess', editorContent: '', phpVersionToSet: '8.2' }" 
+                                                       x-init="editorContent = (finding.data && finding.data[activeEditorFile]) ? finding.data[activeEditorFile].content : ''; $watch('activeEditorFile', val => { editorContent = (finding.data && finding.data[val]) ? finding.data[val].content : ''; })" 
+                                                       class="space-y-4 p-4 bg-slate-900/60 border border-slate-700/50 rounded-lg">
+                                                      
+                                                      <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-slate-800">
+                                                          <div>
+                                                              <h4 class="text-xs font-bold text-slate-200 uppercase tracking-wider">Configuration File Editor</h4>
+                                                              <p class="text-[10px] text-slate-400">Directly edit configuration files or set the PHP version.</p>
+                                                          </div>
+                                                          
+                                                          <!-- PHP Version Presets Selector -->
+                                                          <div class="flex items-center gap-2">
+                                                              <span class="text-[10px] text-slate-400">PHP Version:</span>
+                                                              <select x-model="phpVersionToSet" class="bg-slate-800 border border-slate-700 rounded text-xs px-2 py-1 text-slate-300 focus:outline-none focus:border-amber-500">
+                                                                  <option value="8.1">PHP 8.1</option>
+                                                                  <option value="8.2">PHP 8.2</option>
+                                                                  <option value="8.3">PHP 8.3</option>
+                                                                  <option value="8.4">PHP 8.4</option>
+                                                              </select>
+                                                              <button type="button" @click="attemptFix('IntegrityRepairAgent', 'set_php_version:' + phpVersionToSet)" class="cursor-pointer text-[10px] font-bold uppercase tracking-wider bg-amber-600/20 hover:bg-amber-600 text-amber-400 hover:text-white border border-amber-600/50 px-3 py-1.5 rounded transition">
+                                                                  Set Version
+                                                              </button>
+                                                          </div>
+                                                      </div>
+
+                                                      <!-- File Selector Tabs -->
+                                                      <div class="flex gap-2">
+                                                          <template x-for="(fileData, fileKey) in finding.data" :key="fileKey">
+                                                              <button type="button" @click="activeEditorFile = fileKey"
+                                                                      :class="activeEditorFile === fileKey ? 'bg-sky-600/20 text-sky-400 border-sky-500/50' : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200'"
+                                                                      class="px-3 py-1.5 border rounded text-xs font-mono transition flex items-center gap-2">
+                                                                  <span :class="fileData.exists ? 'bg-emerald-500' : 'bg-rose-500'" class="w-1.5 h-1.5 rounded-full"></span>
+                                                                  <span x-text="fileKey === 'htaccess' ? '.htaccess' : (fileKey === 'php_ini' ? 'php.ini' : '.user.ini')"></span>
+                                                              </button>
+                                                          </template>
+                                                      </div>
+
+                                                      <!-- Editor Textarea -->
+                                                      <div class="space-y-2">
+                                                          <div class="flex justify-between items-center text-[10px]">
+                                                              <span class="font-mono text-slate-500" x-text="'File Path: ' + (finding.data[activeEditorFile] ? finding.data[activeEditorFile].path : '')"></span>
+                                                              <span x-show="finding.data[activeEditorFile] && !finding.data[activeEditorFile].exists" class="text-rose-400 font-bold">File does not exist (saving will create it)</span>
+                                                          </div>
+                                                          
+                                                          <textarea x-model="editorContent" rows="12" class="w-full bg-slate-950 text-slate-300 font-mono text-xs p-3 rounded border border-slate-800 focus:outline-none focus:border-sky-500/50 shadow-inner resize-y"></textarea>
+                                                          
+                                                          <div class="flex justify-end gap-2">
+                                                              <button type="button" @click="attemptFix('IntegrityRepairAgent', 'save_file:' + activeEditorFile, { content: editorContent })" class="cursor-pointer text-[10px] font-bold uppercase tracking-wider bg-emerald-600/20 hover:bg-emerald-600 text-emerald-400 hover:text-white border border-emerald-600/50 px-4 py-2 rounded transition">
+                                                                  Save File
+                                                              </button>
+                                                          </div>
+                                                      </div>
+                                                  </div>
+                                              </template>
+                                          </div>
+                                      </template>
 
                                      <!-- DatabaseRepairAgent UI -->
                                      <template x-if="agent === 'DatabaseRepairAgent' && id === 'table_integrity'">
@@ -931,7 +990,10 @@ if ($file_age > $expiration_time) {
                                                                     <td class="px-4 py-3 text-right">
                                                                         <!-- Togglers -->
                                                                         <template x-if="id === 'manage_plugins'">
-                                                                            <button type="button" @click.prevent.stop="triggerPluginToggle(agent, key)" class="relative z-10 ml-auto cursor-pointer text-[10px] px-3 py-1.5 rounded bg-slate-800 border border-slate-700 hover:border-amber-500 hover:text-amber-400 transition" x-text="props.active ? 'Deactivate' : 'Activate'"></button>
+                                                                            <div class="flex gap-2 justify-end">
+                                                                                <button type="button" @click.prevent.stop="triggerPluginToggle(agent, key)" class="relative z-10 cursor-pointer text-[10px] px-3 py-1.5 rounded bg-slate-800 border border-slate-700 hover:border-amber-500 hover:text-amber-400 transition" x-text="props.active ? 'Deactivate' : 'Activate'"></button>
+                                                                                <button type="button" @click.prevent.stop="triggerPluginUpdate(agent, key)" class="relative z-10 cursor-pointer text-[10px] px-3 py-1.5 rounded bg-slate-800 border border-slate-700 hover:border-blue-500 hover:text-blue-400 transition">Update</button>
+                                                                            </div>
                                                                         </template>
                                                                         <template x-if="id === 'manage_themes' && !props.active">
                                                                             <button type="button" @click.prevent.stop="triggerThemeActivate(agent, key)" class="relative z-10 ml-auto cursor-pointer text-[10px] px-3 py-1.5 rounded bg-slate-800 border border-slate-700 hover:border-sky-500 hover:text-sky-400 transition">Activate Theme</button>
@@ -1263,6 +1325,9 @@ if ($file_age > $expiration_time) {
                 },
                 triggerPluginToggle(agent, key) {
                     return this.attemptFix(agent, 'toggle_plugin:' + key);
+                },
+                triggerPluginUpdate(agent, key) {
+                    return this.attemptFix(agent, 'update_plugin:' + key);
                 },
                 triggerThemeActivate(agent, key) {
                     return this.attemptFix(agent, 'theme_activate:' + key);

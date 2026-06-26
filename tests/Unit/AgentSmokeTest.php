@@ -312,6 +312,7 @@ final class AgentSmokeTest extends TestCase
         $integrity = new \WPDiagnose\Agents\IntegrityRepairAgent\IntegrityRepairAgent();
         $res = $integrity->check();
         self::assertArrayHasKey('htaccess_integrity', $res);
+        self::assertArrayHasKey('config_files', $res);
 
         $dbRepair = new \WPDiagnose\Agents\DatabaseRepairAgent\DatabaseRepairAgent(false);
         $res = $dbRepair->check();

@@ -60,8 +60,6 @@ class AssetManagerAgent implements DiagnosticInterface
     {
         $this->lastActionResult = ['success' => false, 'message' => 'Unknown asset action.', 'data' => null];
 
-        // $id could be "toggle_plugin:akismet/akismet.php"
-        // or "toggle_theme:twentytwentyfour" etc.
         if (strpos($id, 'toggle_plugin:') === 0) {
             $pluginFile = substr($id, 14);
             return $this->togglePlugin($pluginFile);
@@ -70,6 +68,11 @@ class AssetManagerAgent implements DiagnosticInterface
         if (strpos($id, 'theme_activate:') === 0) {
             $themeSlug = substr($id, 15);
             return $this->activateTheme($themeSlug);
+        }
+
+        if (strpos($id, 'update_plugin:') === 0) {
+            $pluginFile = substr($id, 14);
+            return $this->updatePlugin($pluginFile);
         }
 
         return false;
@@ -314,5 +317,97 @@ class AssetManagerAgent implements DiagnosticInterface
         }
 
         return preg_match('/^(?:a|O|s|b|i|d):/', $value) === 1;
+    }
+
+    private function updatePlugin(string $pluginRelPath): bool
+    {
+        $pluginRelPath = $this->normalizePluginPath($pluginRelPath);
+        $slug = $pluginRelPath;
+        if (strpos($pluginRelPath, '/') !== false) {
+            $slug = explode('/', $pluginRelPath)[0];
+        } else {
+            $slug = pathinfo($pluginRelPath, PATHINFO_FILENAME);
+        }
+
+        $url = "https://downloads.wordpress.org/plugin/" . $slug . ".zip";
+        
+        $zipData = null;
+        if (function_exists('curl_init')) {
+            $ch = curl_init();
+            curl_setopt($ch, CURLOPT_URL, $url);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 60);
+            $zipData = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+            
+            if ($httpCode !== 200) {
+                $zipData = null;
+            }
+        }
+        
+        if (!$zipData) {
+            $zipData = @file_get_contents($url);
+        }
+
+        if (!$zipData) {
+            $this->lastActionResult = [
+                'success' => false,
+                'message' => "Could not download update zip for plugin '{$slug}' from WordPress.org. Verify the plugin name or connection.",
+                'data' => null
+            ];
+            return false;
+        }
+
+        $backupDir = ABSPATH . 'wp-content/uploads/wp-diagnose-backups';
+        if (!is_dir($backupDir)) {
+            @mkdir($backupDir, 0755, true);
+        }
+        $tempZip = $backupDir . '/temp-update-' . time() . '.zip';
+        if (@file_put_contents($tempZip, $zipData) === false) {
+            $this->lastActionResult = [
+                'success' => false,
+                'message' => "Could not write temporary zip file. Check folder permissions in wp-content/uploads/.",
+                'data' => null
+            ];
+            return false;
+        }
+
+        if (!class_exists('ZipArchive')) {
+            @unlink($tempZip);
+            $this->lastActionResult = [
+                'success' => false,
+                'message' => "ZipArchive class not loaded. Cannot extract plugin update.",
+                'data' => null
+            ];
+            return false;
+        }
+
+        $zip = new \ZipArchive();
+        if ($zip->open($tempZip) === true) {
+            $extractPath = ABSPATH . 'wp-content/plugins/';
+            $extractSuccess = @$zip->extractTo($extractPath);
+            $zip->close();
+            @unlink($tempZip);
+
+            if ($extractSuccess) {
+                $this->lastActionResult = [
+                    'success' => true,
+                    'message' => "Plugin '{$slug}' was updated successfully to the latest version from WordPress.org.",
+                    'data' => ['plugin' => $pluginRelPath]
+                ];
+                return true;
+            }
+        }
+
+        @unlink($tempZip);
+        $this->lastActionResult = [
+            'success' => false,
+            'message' => "Failed to extract update zip for '{$slug}'. Check directory permissions.",
+            'data' => null
+        ];
+        return false;
     }
 }
