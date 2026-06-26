@@ -154,6 +154,7 @@ class SecurityHeadersAgent implements DiagnosticInterface
         $securityBlock = "\n# BEGIN WordPress Diagnose Security Headers\n" .
                          "<IfModule mod_headers.c>\n" .
                          "  Header set Strict-Transport-Security \"max-age=31536000; includeSubDomains; preload\"\n" .
+                         "  Header set Content-Security-Policy \"upgrade-insecure-requests\"\n" .
                          "  Header set X-Frame-Options \"SAMEORIGIN\"\n" .
                          "  Header set X-Content-Type-Options \"nosniff\"\n" .
                          "  Header set Referrer-Policy \"strict-origin-when-cross-origin\"\n" .

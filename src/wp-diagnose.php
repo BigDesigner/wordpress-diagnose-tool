@@ -424,6 +424,35 @@ if ($is_json || isset($_GET['action'])) {
                     echo 'Backup file not found or invalid filename.';
                     exit;
                 }
+            } elseif ($_GET['action'] === 'download_snapshot') {
+                $filename = $_GET['file'] ?? '';
+                $filename = basename($filename);
+                
+                $baseDir = defined('ABSPATH') ? ABSPATH : dirname(__FILE__) . '/';
+                $snapshotDir = rtrim($baseDir, '/\\') . '/wp-content/uploads/wp-diagnose-backups/.snapshots';
+                $filePath = $snapshotDir . '/' . $filename;
+                
+                if ($filename && str_ends_with($filename, '.json') && is_file($filePath)) {
+                    wpd_log_action('DOWNLOAD_SNAPSHOT', "File: $filename");
+                    while (ob_get_level()) ob_end_clean();
+                    
+                    header('Content-Description: File Transfer');
+                    header('Content-Type: application/json; charset=utf-8');
+                    header('Content-Disposition: attachment; filename="' . $filename . '"');
+                    header('Expires: 0');
+                    header('Cache-Control: must-revalidate');
+                    header('Pragma: public');
+                    header('Content-Length: ' . filesize($filePath));
+                    
+                    flush();
+                    readfile($filePath);
+                    exit;
+                } else {
+                    while (ob_get_level()) ob_end_clean();
+                    header('HTTP/1.0 404 Not Found');
+                    echo 'Snapshot file not found or invalid filename.';
+                    exit;
+                }
             }
 
             if ($is_json) {
@@ -1126,7 +1155,12 @@ if ($file_age > $expiration_time) {
                                                          <tbody class="divide-y divide-slate-800">
                                                              <template x-for="snap in finding.data" :key="snap.filename">
                                                                  <tr class="hover:bg-slate-800/40">
-                                                                     <td class="px-4 py-2 font-mono text-sky-400" x-text="snap.filename"></td>
+                                                                      <td class="px-4 py-2 font-mono text-sky-400">
+                                                                          <a :href="'?token=' + token + '&action=download_snapshot&file=' + encodeURIComponent(snap.filename)" class="hover:underline hover:text-sky-300 flex items-center gap-1.5" download>
+                                                                              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                                                                              <span x-text="snap.filename"></span>
+                                                                          </a>
+                                                                      </td>
                                                                      <td class="px-4 py-2" x-text="snap.size"></td>
                                                                      <td class="px-4 py-2" x-text="snap.created_at"></td>
                                                                      <td class="px-4 py-2 text-right">

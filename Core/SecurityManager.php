@@ -40,6 +40,8 @@ final class SecurityManager
             'action_roles' => [
                 'dashboard' => 'viewer',
                 'fetch_report' => 'viewer',
+                'download_backup' => 'viewer',
+                'download_snapshot' => 'viewer',
                 'fix' => 'operator',
                 'self_destruct' => 'admin',
             ],
