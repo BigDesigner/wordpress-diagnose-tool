@@ -68,13 +68,6 @@ if (!function_exists('syncProjectVersion')) {
                     ],
                     'replacement' => "# WordPress Diagnose Tool (v{$version})",
                 ],
-                [
-                    'patterns' => [
-                        '/^## Key Features \(v[^)\r\n]+\)\r?$/m',
-                        '/^## .*Key Features \(v[^)\r\n]+\)\r?$/m',
-                    ],
-                    'replacement' => "## Key Features (v{$version})",
-                ],
             ],
             'docs/AUDIT_REPORT.md' => [
                 [
