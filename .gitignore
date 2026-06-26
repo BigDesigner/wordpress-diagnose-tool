@@ -33,3 +33,7 @@ composer.lock
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Local/tooling files
+.npm-cache/
+repomix-output.xml

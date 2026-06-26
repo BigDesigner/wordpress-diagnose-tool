@@ -49,6 +49,11 @@ namespace WPDiagnose\Agents\HTTPAgent {
             return $this->results;
         }
 
+        public function report(): array
+        {
+            return $this->results ?: $this->check();
+        }
+
         public function fix(string $id): bool
         {
             // Network diagnostics usually do not have automatic resolution paths.

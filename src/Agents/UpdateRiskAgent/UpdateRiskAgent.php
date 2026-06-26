@@ -80,6 +80,11 @@ namespace WPDiagnose\Agents\UpdateRiskAgent {
             return $this->results;
         }
 
+        public function report(): array
+        {
+            return $this->results ?: $this->check();
+        }
+
         public function fix(string $id): bool
         {
             // Update risk has no automatic fix; it is diagnostic only.

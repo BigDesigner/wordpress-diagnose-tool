@@ -98,6 +98,11 @@ namespace WPDiagnose\Agents\DatabaseRepairAgent {
             return $this->results;
         }
 
+        public function report(): array
+        {
+            return $this->results ?: $this->check();
+        }
+
         public function fix(string $id): bool
         {
             $this->lastActionResult = null;
