@@ -131,6 +131,12 @@ for ($i = 0; $i <= 5; $i++) {
             // Catch fatal errors/exceptions to prevent catastrophic failure
             $WP_LOADED = false;
         }
+        if ($WP_LOADED) {
+            global $wpdb;
+            if (!isset($wpdb) || !is_object($wpdb)) {
+                $WP_LOADED = false;
+            }
+        }
         break;
     }
     $base = dirname($base);

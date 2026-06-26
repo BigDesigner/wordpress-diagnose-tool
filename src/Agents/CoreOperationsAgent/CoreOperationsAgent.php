@@ -284,13 +284,13 @@ class CoreOperationsAgent implements DiagnosticInterface
             }
         }
 
-        if (!$this->isWpLoaded) {
+        global $wpdb;
+        if (!$this->isWpLoaded || !isset($wpdb) || !is_object($wpdb)) {
             global $DB;
             if ($DB) {
                 $DB->mysqli->query("DELETE FROM `{$DB->prefix}options` WHERE `option_name` LIKE '_transient_%' OR `option_name` LIKE '_site_transient_%'");
             }
         } else {
-            global $wpdb;
             $wpdb->query("DELETE FROM `{$wpdb->options}` WHERE `option_name` LIKE '_transient_%' OR `option_name` LIKE '_site_transient_%'");
         }
 
