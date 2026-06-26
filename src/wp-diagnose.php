@@ -302,6 +302,78 @@ if ($is_json || isset($_GET['action'])) {
                 header('Content-Type: application/json; charset=utf-8');
                 echo json_encode($reports, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
                 exit;
+            } elseif ($_GET['action'] === 'export_ai_report') {
+                $reports = $engine->getReports();
+                $ai_report = [
+                    'generated_at' => date('Y-m-d H:i:s'),
+                    'system_info' => [
+                        'os' => PHP_OS,
+                        'sapi' => php_sapi_name(),
+                        'server_software' => $_SERVER['SERVER_SOFTWARE'] ?? 'Unknown',
+                        'php_version' => PHP_VERSION,
+                        'wp_loaded' => $WP_LOADED,
+                        'wp_version' => $WP_LOADED ? ($GLOBALS['wp_version'] ?? 'Unknown') : 'Unknown',
+                        'config_found' => ($config_path !== null),
+                    ],
+                    'php_configurations' => [
+                        'memory_limit' => ini_get('memory_limit'),
+                        'max_execution_time' => ini_get('max_execution_time'),
+                        'upload_max_filesize' => ini_get('upload_max_filesize'),
+                        'post_max_size' => ini_get('post_max_size'),
+                        'display_errors' => ini_get('display_errors'),
+                        'open_basedir' => ini_get('open_basedir'),
+                        'disable_functions' => ini_get('disable_functions'),
+                        'max_input_vars' => ini_get('max_input_vars'),
+                    ],
+                    'critical_paths_permissions' => [],
+                    'agent_reports' => $reports
+                ];
+                
+                $paths = [
+                    'ABSPATH' => ABSPATH,
+                    'wp-config.php' => $config_path,
+                    '.htaccess' => ABSPATH . '.htaccess',
+                    'wp-content' => ABSPATH . 'wp-content',
+                    'wp-content/plugins' => ABSPATH . 'wp-content/plugins',
+                    'wp-content/themes' => ABSPATH . 'wp-content/themes',
+                    'wp-content/uploads' => ABSPATH . 'wp-content/uploads',
+                ];
+                
+                foreach ($paths as $name => $path) {
+                    if ($path && (is_file($path) || is_dir($path))) {
+                        $perms = substr(sprintf('%o', fileperms($path)), -4);
+                        $owner = 'Unknown';
+                        if (function_exists('posix_getpwuid')) {
+                            $stat = stat($path);
+                            if ($stat) {
+                                $ownerData = posix_getpwuid($stat['uid']);
+                                if ($ownerData) {
+                                    $owner = $ownerData['name'];
+                                }
+                            }
+                        }
+                        $ai_report['critical_paths_permissions'][$name] = [
+                            'path' => $path,
+                            'exists' => true,
+                            'type' => is_dir($path) ? 'directory' : 'file',
+                            'permissions' => $perms,
+                            'writable' => is_writable($path),
+                            'readable' => is_readable($path),
+                            'owner' => $owner,
+                        ];
+                    } else {
+                        $ai_report['critical_paths_permissions'][$name] = [
+                            'path' => $path,
+                            'exists' => false,
+                        ];
+                    }
+                }
+                
+                while (ob_get_level()) ob_end_clean();
+                header('Content-Type: application/json; charset=utf-8');
+                header('Content-Disposition: attachment; filename="wp-diagnose-report-' . time() . '.json"');
+                echo json_encode($ai_report, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                exit;
             }
 
             if ($is_json) {
@@ -448,7 +520,15 @@ if ($file_age > $expiration_time) {
                 <p class="text-slate-500 text-xs mt-1 font-mono uppercase tracking-widest">Advanced Diagnostic Agents Swarm</p>
             </div>
             
-            <div class="flex gap-4 items-center">
+            <div class="flex flex-wrap gap-3 items-center justify-end">
+                <label class="flex items-center gap-2 text-xs font-semibold text-slate-400 cursor-pointer bg-slate-800 border border-slate-700/80 px-3 py-2 rounded select-none hover:border-slate-600 transition">
+                    <input type="checkbox" x-model="fastMode" class="form-checkbox h-3.5 w-3.5 rounded text-emerald-500 bg-slate-900 border-slate-700 focus:ring-0 focus:ring-offset-0 cursor-pointer">
+                    Fast Mode
+                </label>
+                <a :href="'?token=' + token + '&action=export_ai_report'" download class="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded text-sm font-semibold transition flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                    Export AI Report
+                </a>
                 <button type="button" @click="fetchReport()" :disabled="loading" class="bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white px-4 py-2 rounded text-sm font-semibold transition flex items-center gap-2">
                     <svg class="w-4 h-4" :class="loading ? 'animate-spin' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
                     Refresh
@@ -978,29 +1058,39 @@ if ($file_age > $expiration_time) {
                                                             </tr>
                                                         </thead>
                                                         <tbody class="divide-y divide-slate-800 text-xs">
-                                                            <template x-for="(props, key) in finding.data" :key="key">
-                                                                <tr class="hover:bg-slate-800/50 transition">
-                                                                    <td class="px-4 py-3">
-                                                                        <div class="font-bold text-sky-400 mb-0.5" x-text="props.name || key"></div>
-                                                                        <div class="text-[10px] font-mono text-slate-500 truncate max-w-[200px]" x-text="'Path: ' + key"></div>
-                                                                    </td>
-                                                                    <td class="px-4 py-3 text-center">
-                                                                        <span :class="props.active ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'bg-slate-700/50 text-slate-400 border-slate-600'" class="px-2 py-0.5 text-[9px] uppercase font-bold border rounded-full tracking-wide" x-text="props.active ? 'ACTIVE' : 'INACTIVE'"></span>
-                                                                    </td>
-                                                                    <td class="px-4 py-3 text-right">
-                                                                        <!-- Togglers -->
-                                                                        <template x-if="id === 'manage_plugins'">
-                                                                            <div class="flex gap-2 justify-end">
-                                                                                <button type="button" @click.prevent.stop="triggerPluginToggle(agent, key)" class="relative z-10 cursor-pointer text-[10px] px-3 py-1.5 rounded bg-slate-800 border border-slate-700 hover:border-amber-500 hover:text-amber-400 transition" x-text="props.active ? 'Deactivate' : 'Activate'"></button>
-                                                                                <button type="button" @click.prevent.stop="triggerPluginUpdate(agent, key)" class="relative z-10 cursor-pointer text-[10px] px-3 py-1.5 rounded bg-slate-800 border border-slate-700 hover:border-blue-500 hover:text-blue-400 transition">Update</button>
-                                                                            </div>
-                                                                        </template>
-                                                                        <template x-if="id === 'manage_themes' && !props.active">
-                                                                            <button type="button" @click.prevent.stop="triggerThemeActivate(agent, key)" class="relative z-10 ml-auto cursor-pointer text-[10px] px-3 py-1.5 rounded bg-slate-800 border border-slate-700 hover:border-sky-500 hover:text-sky-400 transition">Activate Theme</button>
-                                                                        </template>
-                                                                    </td>
-                                                                </tr>
-                                                            </template>
+                                                             <template x-for="(props, key) in finding.data" :key="key">
+                                                                 <tr class="hover:bg-slate-800/50 transition">
+                                                                     <td class="px-4 py-3">
+                                                                         <div class="flex flex-wrap items-center gap-2 mb-1">
+                                                                             <span class="font-bold text-sky-400" x-text="props.name || key"></span>
+                                                                             <template x-if="props.version">
+                                                                                 <span class="px-1.5 py-0.5 text-[9px] font-mono font-bold bg-slate-800 text-slate-400 border border-slate-700 rounded" x-text="'v' + props.version"></span>
+                                                                             </template>
+                                                                             <template x-if="props.update_version && props.update_version !== props.version">
+                                                                                 <span class="px-1.5 py-0.5 text-[9px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded animate-pulse" x-text="'Update Available: v' + props.update_version"></span>
+                                                                             </template>
+                                                                         </div>
+                                                                         <div class="text-[10px] font-mono text-slate-500 truncate max-w-[200px]" x-text="'Path: ' + key"></div>
+                                                                     </td>
+                                                                     <td class="px-4 py-3 text-center">
+                                                                         <span :class="props.active ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'bg-slate-700/50 text-slate-400 border-slate-600'" class="px-2 py-0.5 text-[9px] uppercase font-bold border rounded-full tracking-wide" x-text="props.active ? 'ACTIVE' : 'INACTIVE'"></span>
+                                                                     </td>
+                                                                     <td class="px-4 py-3 text-right">
+                                                                         <!-- Togglers -->
+                                                                         <template x-if="id === 'manage_plugins'">
+                                                                             <div class="flex gap-2 justify-end">
+                                                                                 <button type="button" @click.prevent.stop="triggerPluginToggle(agent, key)" class="relative z-10 cursor-pointer text-[10px] px-3 py-1.5 rounded bg-slate-800 border border-slate-700 hover:border-amber-500 hover:text-amber-400 transition" x-text="props.active ? 'Deactivate' : 'Activate'"></button>
+                                                                                 <button type="button" @click.prevent.stop="triggerPluginUpdate(agent, key)" 
+                                                                                         :class="props.update_version && props.update_version !== props.version ? 'bg-amber-600/30 hover:bg-amber-600 border-amber-500/80 text-amber-400 hover:text-white font-bold' : 'bg-slate-800 border-slate-700 hover:border-blue-500 hover:text-blue-400'"
+                                                                                         class="relative z-10 cursor-pointer text-[10px] px-3 py-1.5 rounded border transition">Update</button>
+                                                                             </div>
+                                                                         </template>
+                                                                         <template x-if="id === 'manage_themes' && !props.active">
+                                                                             <button type="button" @click.prevent.stop="triggerThemeActivate(agent, key)" class="relative z-10 ml-auto cursor-pointer text-[10px] px-3 py-1.5 rounded bg-slate-800 border border-slate-700 hover:border-sky-500 hover:text-sky-400 transition">Activate Theme</button>
+                                                                         </template>
+                                                                     </td>
+                                                                 </tr>
+                                                             </template>
                                                         </tbody>
                                                     </table>
                                                 </div>
@@ -1105,6 +1195,7 @@ if ($file_age > $expiration_time) {
                 notificationSeed: 0,
                 quarantinePathInput: '',
                 testEmailInput: '',
+                fastMode: false,
                 confirmState: {
                     open: false,
                     title: '',
@@ -1114,6 +1205,10 @@ if ($file_age > $expiration_time) {
                     resolver: null
                 },
                 init() {
+                    this.fastMode = localStorage.getItem('wpd_fast_mode') === 'true';
+                    this.$watch('fastMode', val => {
+                        localStorage.setItem('wpd_fast_mode', val ? 'true' : 'false');
+                    });
                     this.fetchReport();
                 },
                 displayAgentLabel(agent) {
@@ -1361,7 +1456,7 @@ if ($file_age > $expiration_time) {
                     });
                 },
                 async attemptFix(agent, id, params = {}, options = {}) {
-                    const skipConfirm = options.skipConfirm === true;
+                    const skipConfirm = options.skipConfirm === true || this.fastMode;
                     const confirmed = skipConfirm ? true : await this.askConfirmation({
                         title: 'Trigger Agentic Fix',
                         body: `Apply recovery action [${id}] now?`,

@@ -92,6 +92,19 @@ class AssetManagerAgent implements DiagnosticInterface
     {
         $activePlugins = $this->normalizePluginList($this->getOption('active_plugins', []));
 
+        // Get WordPress update plugins transient if available to check for updates
+        $updateList = [];
+        $updateState = $this->getOption('_site_transient_update_plugins');
+        if ($updateState) {
+            $response = is_object($updateState) ? ($updateState->response ?? []) : ($updateState['response'] ?? []);
+            foreach ($response as $file => $data) {
+                $newVer = is_object($data) ? ($data->new_version ?? '') : ($data['new_version'] ?? '');
+                if ($newVer) {
+                    $updateList[$this->normalizePluginPath($file)] = $newVer;
+                }
+            }
+        }
+
         $plugins = [];
         // Scan wp-content/plugins directly to support independent mode
         $pluginDir = ABSPATH . 'wp-content/plugins/';
@@ -108,10 +121,16 @@ class AssetManagerAgent implements DiagnosticInterface
                         $content = file_get_contents($subfile->getPathname(), false, null, 0, 8192);
                         if (preg_match('/^[ \t\/*#@]*Plugin Name:(.*)$/mi', $content, $match)) {
                             $pluginName = trim($match[1]);
+                            $pluginVersion = '0.0.0';
+                            if (preg_match('/^[ \t\/*#@]*Version:(.*)$/mi', $content, $vMatch)) {
+                                $pluginVersion = trim($vMatch[1]);
+                            }
                             $relPath = $this->normalizePluginPath($fileinfo->getFilename() . '/' . $subfile->getFilename());
                             $plugins[$relPath] = [
                                 'name'   => $pluginName,
                                 'active' => in_array($relPath, $activePlugins, true),
+                                'version' => $pluginVersion,
+                                'update_version' => $updateList[$relPath] ?? null,
                             ];
                         }
                     }
@@ -120,10 +139,16 @@ class AssetManagerAgent implements DiagnosticInterface
                 $content = file_get_contents($fileinfo->getPathname(), false, null, 0, 8192);
                 if (preg_match('/^[ \t\/*#@]*Plugin Name:(.*)$/mi', $content, $match)) {
                     $pluginName = trim($match[1]);
+                    $pluginVersion = '0.0.0';
+                    if (preg_match('/^[ \t\/*#@]*Version:(.*)$/mi', $content, $vMatch)) {
+                        $pluginVersion = trim($vMatch[1]);
+                    }
                     $relPath = $this->normalizePluginPath($fileinfo->getFilename());
                     $plugins[$relPath] = [
                         'name'   => $pluginName,
                         'active' => in_array($relPath, $activePlugins, true),
+                        'version' => $pluginVersion,
+                        'update_version' => $updateList[$relPath] ?? null,
                     ];
                 }
             }
@@ -135,6 +160,19 @@ class AssetManagerAgent implements DiagnosticInterface
     {
         $currentStylesheet = $this->normalizeThemeSlug((string) $this->getOption('stylesheet', ''));
         $currentTemplate = $this->normalizeThemeSlug((string) $this->getOption('template', ''));
+
+        // Get WordPress update themes transient if available
+        $updateList = [];
+        $updateState = $this->getOption('_site_transient_update_themes');
+        if ($updateState) {
+            $response = is_object($updateState) ? ($updateState->response ?? []) : ($updateState['response'] ?? []);
+            foreach ($response as $slug => $data) {
+                $newVer = is_object($data) ? ($data->new_version ?? '') : ($data['new_version'] ?? '');
+                if ($newVer) {
+                    $updateList[$this->normalizeThemeSlug($slug)] = $newVer;
+                }
+            }
+        }
 
         $themes = [];
         $themeDir = ABSPATH . 'wp-content/themes/';
@@ -149,9 +187,15 @@ class AssetManagerAgent implements DiagnosticInterface
             if (is_file($styleCss)) {
                 $content = file_get_contents($styleCss, false, null, 0, 8192);
                 $themeName = preg_match('/^[ \t\/*#]*Theme Name:(.*)$/mi', $content, $match) ? trim($match[1]) : $slug;
+                $themeVersion = '0.0.0';
+                if (preg_match('/^[ \t\/*#]*Version:(.*)$/mi', $content, $vMatch)) {
+                    $themeVersion = trim($vMatch[1]);
+                }
                 $themes[$slug] = [
                     'name'   => $themeName,
                     'active' => ($currentStylesheet === $slug || ($currentStylesheet === '' && $currentTemplate === $slug)),
+                    'version' => $themeVersion,
+                    'update_version' => $updateList[$slug] ?? null,
                 ];
             }
         }
