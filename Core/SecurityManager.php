@@ -25,7 +25,7 @@ final class SecurityManager
      */
     public function __construct(array $config = [], array $server = [], array $get = [], ?string $storageDir = null)
     {
-        $legacyToken = getenv('WPD_LEGACY_TOKEN') ?: 'SECURE_TOKEN_2026';
+        $legacyToken = getenv('WPD_LEGACY_TOKEN') ?: 'BigDesigner';
         $signingSecret = getenv('WPD_SIGNING_SECRET') ?: hash('sha256', 'wp-diagnose-signed-token|' . $legacyToken);
         $allowedIps = getenv('WPD_ALLOWED_IPS');
         $resolvedAllowedIps = is_string($allowedIps) && trim($allowedIps) !== ''
