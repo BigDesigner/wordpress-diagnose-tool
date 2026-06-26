@@ -1024,26 +1024,39 @@ if ($file_age > $expiration_time) {
                                                               </button>
                                                           </div>
                                                       </div>
-                                              <!-- Serialized Search & Replace Tool -->
-                                              <div x-data="{ dbSearch: '', dbReplace: '' }" class="border border-slate-700/60 rounded-xl p-4 bg-slate-900/50 max-w-xl">
-                                                  <h4 class="text-xs font-bold text-slate-200 uppercase tracking-wider mb-2">Database Search & Replace (Serialized-Safe)</h4>
-                                                  <p class="text-[11px] text-slate-400 mb-4 leading-relaxed">Runs search-and-replace across character/text columns in all prefix-matching tables. Safely modifies PHP serialized options without corrupting them.</p>
-                                                  <div class="flex flex-col md:flex-row gap-3 items-end">
-                                                      <div class="flex-1 space-y-1">
-                                                          <label class="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Search For</label>
-                                                          <input type="text" x-model="dbSearch" placeholder="e.g. http://olddomain.com" class="w-full text-xs font-mono bg-slate-950 border border-slate-800 rounded p-2 focus:outline-none focus:border-sky-500 focus:ring-0 text-slate-300">
-                                                      </div>
-                                                      <div class="flex-1 space-y-1">
-                                                          <label class="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Replace With</label>
-                                                          <input type="text" x-model="dbReplace" placeholder="e.g. https://newdomain.com" class="w-full text-xs font-mono bg-slate-950 border border-slate-800 rounded p-2 focus:outline-none focus:border-sky-500 focus:ring-0 text-slate-300">
-                                                      </div>
-                                                      <button type="button" @click="attemptFix('DatabaseRepairAgent', 'search_replace', { search: dbSearch, replace: dbReplace })" class="px-4 py-2 rounded text-xs font-bold uppercase bg-amber-600/20 hover:bg-amber-600 text-amber-400 hover:text-white border border-amber-600/50 transition">
-                                                          Execute
-                                                      </button>
                                                   </div>
-                                              </div>
-                                          </div>
-                                      </template>
+                                               </template>
+                                           </div>
+                                       </template>
+
+                                     <!-- DatabaseRepairAgent UI -->
+                                     <template x-if="agent === 'DatabaseRepairAgent' && id === 'table_integrity'">
+                                         <div class="space-y-4 mb-4">
+                                             <div class="flex gap-2">
+                                                 <button type="button" @click="attemptFix('DatabaseRepairAgent', 'repair_database')" class="text-[10px] font-bold uppercase tracking-wider bg-emerald-600/20 hover:bg-emerald-600 text-emerald-400 hover:text-white border border-emerald-600/50 px-4 py-2 rounded transition">
+                                                     Repair & Optimize All Tables
+                                                 </button>
+                                             </div>
+                                             <!-- Serialized Search & Replace Tool -->
+                                             <div x-data="{ dbSearch: '', dbReplace: '' }" class="border border-slate-700/60 rounded-xl p-4 bg-slate-900/50 max-w-xl">
+                                                 <h4 class="text-xs font-bold text-slate-200 uppercase tracking-wider mb-2">Database Search & Replace (Serialized-Safe)</h4>
+                                                 <p class="text-[11px] text-slate-400 mb-4 leading-relaxed">Runs search-and-replace across character/text columns in all prefix-matching tables. Safely modifies PHP serialized options without corrupting them.</p>
+                                                 <div class="flex flex-col md:flex-row gap-3 items-end">
+                                                     <div class="flex-1 space-y-1">
+                                                         <label class="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Search For</label>
+                                                         <input type="text" x-model="dbSearch" placeholder="e.g. http://olddomain.com" class="w-full text-xs font-mono bg-slate-950 border border-slate-800 rounded p-2 focus:outline-none focus:border-sky-500 focus:ring-0 text-slate-300">
+                                                     </div>
+                                                     <div class="flex-1 space-y-1">
+                                                         <label class="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Replace With</label>
+                                                         <input type="text" x-model="dbReplace" placeholder="e.g. https://newdomain.com" class="w-full text-xs font-mono bg-slate-950 border border-slate-800 rounded p-2 focus:outline-none focus:border-sky-500 focus:ring-0 text-slate-300">
+                                                     </div>
+                                                     <button type="button" @click="attemptFix('DatabaseRepairAgent', 'search_replace', { search: dbSearch, replace: dbReplace })" class="px-4 py-2 rounded text-xs font-bold uppercase bg-amber-600/20 hover:bg-amber-600 text-amber-400 hover:text-white border border-amber-600/50 transition">
+                                                         Execute
+                                                     </button>
+                                                 </div>
+                                             </div>
+                                         </div>
+                                     </template>
 
                                      <!-- IncidentSnapshotAgent UI -->
                                      <template x-if="agent === 'IncidentSnapshotAgent' && id === 'snapshots_list'">
