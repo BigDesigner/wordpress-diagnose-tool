@@ -29,41 +29,68 @@ class UpdateRiskAgent implements DiagnosticInterface
     {
         $this->results = [];
 
-        if (!$this->wpLoaded) {
-            $this->results['update_status'] = [
-                'status' => 'WARN',
-                'info' => 'WordPress is not loaded. Cannot fetch pending updates.'
-            ];
-            return $this->results;
-        }
-
-        // In loaded mode, check updates
         $updates = [
             'core' => 0,
             'plugins' => 0,
             'themes' => 0
         ];
 
-        // 1. Core updates
-        $updateCore = get_site_transient('update_core');
-        if (isset($updateCore->updates) && is_array($updateCore->updates)) {
-            foreach ($updateCore->updates as $up) {
-                if ($up->response === 'upgrade') {
-                    $updates['core']++;
+        if ($this->wpLoaded) {
+            // 1. Core updates
+            $updateCore = get_site_transient('update_core');
+            if (isset($updateCore->updates) && is_array($updateCore->updates)) {
+                foreach ($updateCore->updates as $up) {
+                    if ($up->response === 'upgrade') {
+                        $updates['core']++;
+                    }
                 }
             }
-        }
 
-        // 2. Plugin updates
-        $updatePlugins = get_site_transient('update_plugins');
-        if (isset($updatePlugins->response) && is_array($updatePlugins->response)) {
-            $updates['plugins'] = count($updatePlugins->response);
-        }
+            // 2. Plugin updates
+            $updatePlugins = get_site_transient('update_plugins');
+            if (isset($updatePlugins->response) && is_array($updatePlugins->response)) {
+                $updates['plugins'] = count($updatePlugins->response);
+            }
 
-        // 3. Theme updates
-        $updateThemes = get_site_transient('update_themes');
-        if (isset($updateThemes->response) && is_array($updateThemes->response)) {
-            $updates['themes'] = count($updateThemes->response);
+            // 3. Theme updates
+            $updateThemes = get_site_transient('update_themes');
+            if (isset($updateThemes->response) && is_array($updateThemes->response)) {
+                $updates['themes'] = count($updateThemes->response);
+            }
+        } else {
+            global $DB;
+            if ($DB) {
+                // 1. Core updates
+                $val = $DB->get_option('_site_transient_update_core');
+                $updateCore = $val ? @unserialize($val) : null;
+                if ($updateCore && isset($updateCore->updates) && is_array($updateCore->updates)) {
+                    foreach ($updateCore->updates as $up) {
+                        if ($up->response === 'upgrade') {
+                            $updates['core']++;
+                        }
+                    }
+                }
+
+                // 2. Plugin updates
+                $val = $DB->get_option('_site_transient_update_plugins');
+                $updatePlugins = $val ? @unserialize($val) : null;
+                if ($updatePlugins && isset($updatePlugins->response) && is_array($updatePlugins->response)) {
+                    $updates['plugins'] = count($updatePlugins->response);
+                }
+
+                // 3. Theme updates
+                $val = $DB->get_option('_site_transient_update_themes');
+                $updateThemes = $val ? @unserialize($val) : null;
+                if ($updateThemes && isset($updateThemes->response) && is_array($updateThemes->response)) {
+                    $updates['themes'] = count($updateThemes->response);
+                }
+            } else {
+                $this->results['update_status'] = [
+                    'status' => 'WARN',
+                    'info' => 'WordPress is not loaded. Cannot fetch pending updates.'
+                ];
+                return $this->results;
+            }
         }
 
         $total = $updates['core'] + $updates['plugins'] + $updates['themes'];

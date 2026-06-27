@@ -105,6 +105,7 @@ if (!$securityDecision['allowed']) {
 
 // -------------------- Try load WordPress --------------------
 $WP_LOADED = false;
+$WP_LOAD_ERROR = '';
 $base = __DIR__;
 
 // If API request, prepare for accidental exit/fatal in wp-load.php
@@ -128,13 +129,14 @@ for ($i = 0; $i <= 5; $i++) {
             require_once $cand;
             $WP_LOADED = true;
         } catch (\Throwable $e) {
-            // Catch fatal errors/exceptions to prevent catastrophic failure
             $WP_LOADED = false;
+            $WP_LOAD_ERROR = $e->getMessage() . ' in ' . $e->getFile() . ' on line ' . $e->getLine();
         }
         if ($WP_LOADED) {
             global $wpdb;
             if (!isset($wpdb) || !is_object($wpdb)) {
                 $WP_LOADED = false;
+                $WP_LOAD_ERROR = 'wpdb global object is not initialized or invalid after loading wp-load.php.';
             }
         }
         break;

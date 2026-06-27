@@ -76,10 +76,144 @@ class WPInspector implements DiagnosticInterface
                 'data'   => $themes,
             ];
         } else {
-            $this->results['wp_env'] = [
-                'status' => 'WARN',
-                'info'   => 'WordPress not loaded. Running in Independent Diagnostic Mode.',
-            ];
+            global $DB;
+            if ($DB) {
+                // Get WP version from wp-includes/version.php
+                $wpVersion = null;
+                $versionFile = ABSPATH . 'wp-includes/version.php';
+                if (is_file($versionFile)) {
+                    include $versionFile;
+                    $wpVersion = $wp_version ?? null;
+                }
+
+                // Check updates if we can unserialize transients
+                $pluginUpdates = [];
+                $themeUpdates = [];
+                $coreUpdateAvailable = false;
+                $coreNewVersion = null;
+
+                $val = $DB->get_option('_site_transient_update_plugins');
+                $updatePlugins = $val ? @unserialize($val) : null;
+                if ($updatePlugins && isset($updatePlugins->response) && is_array($updatePlugins->response)) {
+                    $pluginUpdates = $updatePlugins->response;
+                }
+
+                $val = $DB->get_option('_site_transient_update_themes');
+                $updateThemes = $val ? @unserialize($val) : null;
+                if ($updateThemes && isset($updateThemes->response) && is_array($updateThemes->response)) {
+                    $themeUpdates = $updateThemes->response;
+                }
+
+                $val = $DB->get_option('_site_transient_update_core');
+                $updateCore = $val ? @unserialize($val) : null;
+                if ($updateCore && isset($updateCore->updates) && is_array($updateCore->updates)) {
+                    foreach ($updateCore->updates as $up) {
+                        if ($up->response === 'upgrade') {
+                            $coreUpdateAvailable = true;
+                            $coreNewVersion = $up->current;
+                            break;
+                        }
+                    }
+                }
+
+                $this->results['wp_version'] = [
+                    'status' => $coreUpdateAvailable ? 'WARN' : 'OK',
+                    'info'   => 'v' . ($wpVersion ?: 'Unknown') . ($coreUpdateAvailable ? " (Update to {$coreNewVersion} available)" : ' (Up to date)') . ' (Independent DB/FS Mode)',
+                ];
+
+                // Get active plugins from option
+                $activePlugins = [];
+                $serialized = $DB->get_option('active_plugins');
+                if ($serialized) {
+                    $unserialized = @unserialize($serialized);
+                    if (is_array($unserialized)) {
+                        $activePlugins = $unserialized;
+                    }
+                }
+
+                // Scan plugins directory
+                $plugins = [];
+                $pluginsDir = ABSPATH . 'wp-content/plugins';
+                if (is_dir($pluginsDir)) {
+                    $items = @scandir($pluginsDir);
+                    if ($items) {
+                        foreach ($items as $item) {
+                            if ($item === '.' || $item === '..') continue;
+                            $itemPath = $pluginsDir . '/' . $item;
+                            if (is_file($itemPath) && str_ends_with($item, '.php')) {
+                                $this->parsePluginFile($itemPath, $item, $activePlugins, $pluginUpdates, $plugins);
+                            } elseif (is_dir($itemPath)) {
+                                $subFiles = @scandir($itemPath);
+                                if ($subFiles) {
+                                    foreach ($subFiles as $subFile) {
+                                        if (str_ends_with($subFile, '.php')) {
+                                            $subPath = $itemPath . '/' . $subFile;
+                                            if ($this->parsePluginFile($subPath, $item . '/' . $subFile, $activePlugins, $pluginUpdates, $plugins)) {
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                $activeCount = count(array_filter($plugins, fn($p) => $p['active']));
+                $updateCount = count(array_filter($plugins, fn($p) => $p['update_available']));
+                $this->results['active_plugins'] = [
+                    'status' => $updateCount > 0 ? 'WARN' : 'OK',
+                    'info'   => "$activeCount Active | $updateCount Updates Pending (Independent DB/FS Mode)",
+                    'data'   => $plugins,
+                ];
+
+                // Get active theme from option
+                $activeStylesheet = $DB->get_option('stylesheet') ?: 'twentytwentyfour';
+                $activeTemplate = $DB->get_option('template') ?: 'twentytwentyfour';
+
+                // Scan themes directory
+                $themes = [];
+                $themesDir = ABSPATH . 'wp-content/themes';
+                if (is_dir($themesDir)) {
+                    $items = @scandir($themesDir);
+                    if ($items) {
+                        foreach ($items as $item) {
+                            if ($item === '.' || $item === '..') continue;
+                            $styleCss = $themesDir . '/' . $item . '/style.css';
+                            if (is_file($styleCss)) {
+                                $content = @file_get_contents($styleCss);
+                                if ($content) {
+                                    $themeName = preg_match('/Theme Name:\s*(.*)/i', $content, $m) ? trim($m[1]) : $item;
+                                    $themeVersion = preg_match('/Version:\s*(.*)/i', $content, $m) ? trim($m[1]) : 'Unknown';
+                                    $isActive = ($item === $activeStylesheet || $item === $activeTemplate);
+                                    $updateAvailable = isset($themeUpdates[$item]);
+                                    $newVersion = $updateAvailable ? ($themeUpdates[$item]['new_version'] ?? null) : null;
+                                    $themes[$item] = [
+                                        'name' => $themeName,
+                                        'is_active' => $isActive,
+                                        'version' => $themeVersion,
+                                        'update_available' => $updateAvailable,
+                                        'new_version' => $newVersion
+                                    ];
+                                }
+                            }
+                        }
+                    }
+                }
+
+                $activeTheme = array_values(array_filter($themes, fn($t) => $t['is_active']))[0] ?? null;
+                $this->results['theme_health'] = [
+                    'status' => ($activeTheme && $activeTheme['update_available']) ? 'WARN' : 'OK',
+                    'info'   => ($activeTheme ? "Active: {$activeTheme['name']} v{$activeTheme['version']}" : "No Theme Active") . " (Independent DB/FS Mode)",
+                    'data'   => $themes,
+                ];
+            } else {
+                global $WP_LOAD_ERROR;
+                $this->results['wp_env'] = [
+                    'status' => 'WARN',
+                    'info'   => 'WordPress not loaded. Running in Independent Diagnostic Mode.' . ($WP_LOAD_ERROR ? ' (Reason: ' . $WP_LOAD_ERROR . ')' : ''),
+                ];
+            }
         }
 
         error_reporting($prevReporting); // Restore original error level
@@ -203,5 +337,25 @@ class WPInspector implements DiagnosticInterface
         }
 
         return $list;
+    }
+
+    private function parsePluginFile(string $path, string $slug, array $activePlugins, array $pluginUpdates, array &$plugins): bool
+    {
+        $content = @file_get_contents($path);
+        if ($content && str_contains($content, 'Plugin Name:')) {
+            $name = preg_match('/Plugin Name:\s*(.*)/i', $content, $m) ? trim($m[1]) : $slug;
+            $version = preg_match('/Version:\s*(.*)/i', $content, $m) ? trim($m[1]) : 'Unknown';
+            $updateAvailable = isset($pluginUpdates[$slug]);
+            $newVersion = $updateAvailable ? ($pluginUpdates[$slug]->new_version ?? null) : null;
+            $plugins[$slug] = [
+                'name' => $name,
+                'active' => in_array($slug, $activePlugins, true),
+                'version' => $version,
+                'update_available' => $updateAvailable,
+                'new_version' => $newVersion
+            ];
+            return true;
+        }
+        return false;
     }
 }
