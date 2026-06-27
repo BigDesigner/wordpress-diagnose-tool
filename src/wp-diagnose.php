@@ -1632,12 +1632,25 @@ if ($file_age > $expiration_time) {
                         this.testEmailInput = '';
                     }
                 },
+                isNewerVersion(latest, current) {
+                    if (!latest || !current) return false;
+                    const clean = (v) => v.replace(/^v/i, '').split('-')[0].split('.').map(Number);
+                    const lParts = clean(latest);
+                    const cParts = clean(current);
+                    for (let i = 0; i < Math.max(lParts.length, cParts.length); i++) {
+                        const l = lParts[i] || 0;
+                        const c = cParts[i] || 0;
+                        if (l > c) return true;
+                        if (l < c) return false;
+                    }
+                    return false;
+                },
                 async checkForUpdates() {
                     try {
-                        const response = await fetch('https://raw.githubusercontent.com/BigDesigner/wordpress-diagnose-tool/main/VERSION');
+                        const response = await fetch('https://raw.githubusercontent.com/BigDesigner/wordpress-diagnose-tool/main/VERSION?nocache=' + new Date().getTime());
                         if (response.ok) {
                             const latest = (await response.text()).trim();
-                            if (latest && latest !== this.version) {
+                            if (latest && this.isNewerVersion(latest, this.version)) {
                                 this.latestVersion = latest;
                                 this.updateAvailable = true;
                             }
