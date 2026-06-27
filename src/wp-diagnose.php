@@ -1472,7 +1472,7 @@ if ($file_age > $expiration_time) {
 
         <!-- Footer -->
         <footer class="max-w-6xl mx-auto mt-20 pt-10 border-t border-slate-700/50 text-center mb-10">
-                <p class="text-slate-600 text-[10px] font-mono uppercase tracking-[0.2em]">WordPress Diagnose Tool <?php echo \WPDiagnose\Core\Version::label(); ?> &copy; 2026. Built by BigDesigner for GNNcyber.</p>
+                <p class="text-slate-600 text-[10px] font-mono tracking-[0.1em]">WordPress Diagnose Tool <?php echo \WPDiagnose\Core\Version::label(); ?> &copy; 2026. Built by BigDesigner for GNNcyber.</p>
             <div class="mt-4 flex justify-center">
                 <a
                     href="https://github.com/BigDesigner/wordpress-diagnose-tool"
