@@ -61,6 +61,14 @@ class CoreOperationsAgent implements DiagnosticInterface
             ],
         ];
 
+        // Log Files list
+        $logFiles = $this->scanForLogFiles();
+        $this->results['log_files_list'] = [
+            'status' => 'OK',
+            'info'   => sprintf('%d log file(s) found in root/wp-content directories.', count($logFiles)),
+            'data'   => $logFiles,
+        ];
+
         return $this->results;
     }
 
@@ -88,6 +96,13 @@ class CoreOperationsAgent implements DiagnosticInterface
         } elseif (strpos($id, 'reset_admin:') === 0) {
             $username = substr($id, 12);
             return $this->resetPassword($username);
+        } elseif (strpos($id, 'view_log_file:') === 0) {
+            $relPath = substr($id, 14);
+            $this->viewLogFileContents($relPath);
+            return true;
+        } elseif (strpos($id, 'delete_log_file:') === 0) {
+            $relPath = substr($id, 16);
+            return $this->deleteLogFile($relPath);
         }
 
         return false;
@@ -876,6 +891,133 @@ class CoreOperationsAgent implements DiagnosticInterface
                 'native_error_log' => $nativeWritten,
                 'file_exists' => $fileExists,
             ],
+        ];
+        return false;
+    }
+
+    private function scanForLogFiles(): array
+    {
+        $logFiles = [];
+        $dirsToScan = [
+            ABSPATH,
+            ABSPATH . 'wp-content/'
+        ];
+
+        foreach ($dirsToScan as $dir) {
+            if (!is_dir($dir)) {
+                continue;
+            }
+            $files = @scandir($dir);
+            if ($files === false) {
+                continue;
+            }
+            foreach ($files as $file) {
+                if ($file === '.' || $file === '..' || $file === '.htaccess') {
+                    continue;
+                }
+                $path = $dir . $file;
+                if (is_file($path)) {
+                    $lowerName = strtolower($file);
+                    if (str_contains($lowerName, 'error_log') || str_ends_with($lowerName, '.log')) {
+                        $logFiles[] = [
+                            'filename' => $file,
+                            'path' => str_replace('\\', '/', substr($path, strlen(ABSPATH))),
+                            'size' => round(filesize($path) / 1024, 2) . ' KB',
+                            'modified' => date('Y-m-d H:i:s', filemtime($path))
+                        ];
+                    }
+                }
+            }
+        }
+        return $logFiles;
+    }
+
+    private function viewLogFileContents(string $relPath): void
+    {
+        $relPath = rawurldecode($relPath);
+        $relPath = str_replace(['..', '\\'], ['', '/'], $relPath);
+        $filePath = ABSPATH . ltrim($relPath, '/');
+
+        if (!is_file($filePath)) {
+            while (ob_get_level()) ob_end_clean();
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode([
+                'success' => false,
+                'message' => 'Log file not found.',
+                'data' => null,
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            exit;
+        }
+
+        $lowerName = strtolower(basename($filePath));
+        if (!str_contains($lowerName, 'error_log') && !str_ends_with($lowerName, '.log')) {
+            while (ob_get_level()) ob_end_clean();
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode([
+                'success' => false,
+                'message' => 'Invalid log file selection.',
+                'data' => null,
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            exit;
+        }
+
+        $lines = @file($filePath);
+        if ($lines === false) {
+            $lines = [];
+        }
+        $last100 = array_slice($lines, -100);
+
+        while (ob_get_level()) ob_end_clean();
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode([
+            'success' => true,
+            'message' => 'Log file loaded successfully.',
+            'data' => [
+                'path' => $relPath,
+                'contents' => implode("", $last100),
+            ],
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        exit;
+    }
+
+    private function deleteLogFile(string $relPath): bool
+    {
+        $relPath = rawurldecode($relPath);
+        $relPath = str_replace(['..', '\\'], ['', '/'], $relPath);
+        $filePath = ABSPATH . ltrim($relPath, '/');
+
+        if (!is_file($filePath)) {
+            $this->lastActionResult = [
+                'success' => false,
+                'message' => 'Log file not found.',
+                'data' => null,
+            ];
+            return false;
+        }
+
+        $lowerName = strtolower(basename($filePath));
+        if (!str_contains($lowerName, 'error_log') && !str_ends_with($lowerName, '.log')) {
+            $this->lastActionResult = [
+                'success' => false,
+                'message' => 'Invalid log file selection.',
+                'data' => null,
+            ];
+            return false;
+        }
+
+        if (@unlink($filePath)) {
+            $this->lastActionResult = [
+                'success' => true,
+                'message' => 'Log file deleted successfully.',
+                'data' => null,
+            ];
+            return true;
+        }
+
+        $this->lastActionResult = [
+            'success' => false,
+            'message' => 'Failed to delete log file. Check file permissions.',
+            'data' => null,
         ];
         return false;
     }

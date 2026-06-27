@@ -1175,6 +1175,47 @@ if ($file_age > $expiration_time) {
                                          </div>
                                      </template>
 
+                                     <!-- CoreOperationsAgent Log Files UI -->
+                                     <template x-if="agent === 'CoreOperationsAgent' && id === 'log_files_list'">
+                                         <div class="space-y-4 mb-4">
+                                             <template x-if="finding.data && finding.data.length > 0">
+                                                 <div class="overflow-x-auto rounded-lg border border-slate-700 bg-slate-900/30">
+                                                     <table class="w-full text-left text-xs text-slate-300">
+                                                         <thead class="bg-slate-800 text-[10px] uppercase font-bold text-slate-400 border-b border-slate-700/60">
+                                                             <tr>
+                                                                 <th class="px-4 py-2">Filename</th>
+                                                                 <th class="px-4 py-2">Relative Path</th>
+                                                                 <th class="px-4 py-2">Size</th>
+                                                                 <th class="px-4 py-2">Modified</th>
+                                                                 <th class="px-4 py-2 text-right">Actions</th>
+                                                                 <th class="px-4 py-2 text-right">Delete</th>
+                                                             </tr>
+                                                         </thead>
+                                                         <tbody class="divide-y divide-slate-800">
+                                                             <template x-for="log in finding.data" :key="log.path">
+                                                                 <tr class="hover:bg-slate-800/40">
+                                                                     <td class="px-4 py-2 font-mono text-amber-400" x-text="log.filename"></td>
+                                                                     <td class="px-4 py-2 font-mono text-slate-400 text-[10px]" x-text="log.path"></td>
+                                                                     <td class="px-4 py-2" x-text="log.size"></td>
+                                                                     <td class="px-4 py-2" x-text="log.modified"></td>
+                                                                     <td class="px-4 py-2 text-right">
+                                                                         <button type="button" @click="viewArbitraryLogFile(agent, log.path)" class="text-[9px] font-bold uppercase text-sky-400 hover:text-sky-200 border border-sky-500/30 px-2 py-1 rounded bg-sky-500/10">View Log</button>
+                                                                     </td>
+                                                                     <td class="px-4 py-2 text-right">
+                                                                         <button type="button" @click="attemptFix(agent, 'delete_log_file:' + log.path)" class="text-[9px] font-bold uppercase text-rose-400 hover:text-rose-200 border border-rose-500/30 px-2 py-1 rounded bg-rose-500/10">Delete</button>
+                                                                     </td>
+                                                                 </tr>
+                                                             </template>
+                                                         </tbody>
+                                                     </table>
+                                                 </div>
+                                             </template>
+                                             <template x-if="!finding.data || finding.data.length === 0">
+                                                 <p class="text-xs text-slate-400 italic">No log files found in root or wp-content directories.</p>
+                                             </template>
+                                         </div>
+                                     </template>
+
                                     <!-- Dynamic Data Table UI (The Scannable Layout) -->
                                     <template x-if="finding.data && typeof finding.data === 'object'">
                                         <div class="mb-4 overflow-hidden rounded-lg border border-slate-700/60 shadow-inner bg-slate-900/30">
@@ -1550,6 +1591,31 @@ if ($file_age > $expiration_time) {
                             const logPayload = typeof result.data === 'string'
                                 ? { path: 'wp-content/wp-diagnose-tool.log', contents: result.data }
                                 : result.data;
+                            document.body.insertAdjacentHTML('beforeend', `
+                                <div id="errorModal" class="fixed inset-0 bg-slate-900/90 z-50 flex items-center justify-center p-4">
+                                    <div class="bg-black border border-slate-700 w-full max-w-4xl max-h-[85vh] flex flex-col rounded-lg shadow-2xl">
+                                        <div class="flex justify-between items-center p-4 border-b border-slate-800">
+                                            <h3 class="text-rose-500 font-mono font-bold text-sm">Emergency Output: ${logPayload.path} (Last 100 Lines)</h3>
+                                            <button onclick="document.getElementById('errorModal').remove()" class="text-slate-400 hover:text-white font-bold">&times;</button>
+                                        </div>
+                                        <div class="p-4 overflow-y-auto font-mono text-xs text-slate-300 bg-[#0c0c0c] whitespace-pre-wrap leading-relaxed">${window.diagnoseAppInstance.parseLogContent(logPayload.contents || '')}</div>
+                                    </div>
+                                </div>
+                            `);
+                        } else {
+                            this.notify(result.message || 'Log empty or unavailable.', 'error');
+                        }
+                    } catch (e) {
+                        this.notify('Could not fetch log over API.', 'error');
+                    }
+                },
+                async viewArbitraryLogFile(agent, relPath) {
+                    try {
+                        const pathEncoded = encodeURIComponent(relPath);
+                        const response = await fetch(`?token=${this.token}&action=fix&agent=${agent}&id=view_log_file:${pathEncoded}&format=json`);
+                        const result = await response.json();
+                        if (result.success && result.data) {
+                            const logPayload = result.data;
                             document.body.insertAdjacentHTML('beforeend', `
                                 <div id="errorModal" class="fixed inset-0 bg-slate-900/90 z-50 flex items-center justify-center p-4">
                                     <div class="bg-black border border-slate-700 w-full max-w-4xl max-h-[85vh] flex flex-col rounded-lg shadow-2xl">
