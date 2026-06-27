@@ -223,6 +223,96 @@ class WPD_DB
     }
 }
 
+function wpd_self_update(string $version): array
+{
+    $url = "https://github.com/BigDesigner/wordpress-diagnose-tool/releases/download/v{$version}/wp-diagnose-pro.php";
+
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 60);
+    $content = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($httpCode !== 200 || !$content || strlen($content) < 10000) {
+        $opts = [
+            'http' => [
+                'method' => 'GET',
+                'header' => "User-Agent: WordPress-Diagnose-Tool-SelfUpdate\r\n",
+                'follow_location' => 1,
+                'timeout' => 60
+            ],
+            'ssl' => [
+                'verify_peer' => false,
+                'verify_peer_name' => false
+            ]
+        ];
+        $context = stream_context_create($opts);
+        $content = @file_get_contents($url, false, $context);
+        if (!$content || strlen($content) < 10000) {
+            return [
+                'success' => false,
+                'message' => "Failed to download update from GitHub (HTTP code {$httpCode}).",
+                'data' => null
+            ];
+        }
+    }
+
+    if (!str_contains($content, '<?php') || !str_contains($content, 'WordPress Diagnose Tool')) {
+        return [
+            'success' => false,
+            'message' => 'Downloaded file is invalid or corrupted (does not contain signature).',
+            'data' => null
+        ];
+    }
+
+    $currentFile = $_SERVER['SCRIPT_FILENAME'] ?? __FILE__;
+    if (!is_file($currentFile) || !is_writable($currentFile)) {
+        $currentFile = __FILE__;
+        if (!is_writable($currentFile)) {
+            return [
+                'success' => false,
+                'message' => "Current script file is not writable: {$currentFile}",
+                'data' => null
+            ];
+        }
+    }
+
+    $backupFile = $currentFile . '.bak';
+    if (!@copy($currentFile, $backupFile)) {
+        return [
+            'success' => false,
+            'message' => 'Failed to create backup copy of current script.',
+            'data' => null
+        ];
+    }
+
+    if (!@file_put_contents($currentFile, $content)) {
+        @copy($backupFile, $currentFile);
+        @unlink($backupFile);
+        return [
+            'success' => false,
+            'message' => 'Failed to overwrite current script with updated version.',
+            'data' => null
+        ];
+    }
+
+    @unlink($backupFile);
+
+    if (function_exists('opcache_invalidate')) {
+        @opcache_invalidate($currentFile, true);
+    }
+
+    return [
+        'success' => true,
+        'message' => "WordPress Diagnose Tool successfully updated to v{$version}!",
+        'data' => ['version' => $version]
+    ];
+}
+
 function wpd_find_config_path(): ?string
 {
     $candidates = [
@@ -312,6 +402,17 @@ if ($is_json || isset($_GET['action'])) {
                 
                 wpd_log_action('API_FIX_POST', "Agent: $agent | FixID: $id | WP_LOADED: " . ($WP_LOADED ? 'YES' : 'NO'));
                 $response = $engine->performFix($agent, $id);
+            } elseif ($_GET['action'] === 'self_update') {
+                $targetVersion = $_GET['version'] ?? '';
+                if (!preg_match('/^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$/', $targetVersion)) {
+                    $response = [
+                        'success' => false,
+                        'message' => 'Invalid version format.',
+                        'data' => null,
+                    ];
+                } else {
+                    $response = wpd_self_update($targetVersion);
+                }
             } elseif ($_GET['action'] === 'self_destruct') {
                 $success = \WPDiagnose\Core\Cleanup::fullWipe();
                 $response = [
@@ -646,6 +747,17 @@ if ($file_age > $expiration_time) {
             </div>
             
             <div class="flex flex-wrap gap-3 items-center justify-end">
+                <template x-if="updateAvailable">
+                    <button type="button" 
+                            @click="performSelfUpdate()" 
+                            :disabled="updatingSelf"
+                            class="bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white px-4 py-2 rounded text-sm font-semibold transition flex items-center gap-2 animate-pulse">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                        </svg>
+                        <span x-text="'Update ' + latestVersion"></span>
+                    </button>
+                </template>
                 <label class="flex items-center gap-2 text-xs font-semibold text-slate-400 cursor-pointer bg-slate-800 border border-slate-700/80 px-3 py-2 rounded select-none hover:border-slate-600 transition">
                     <input type="checkbox" x-model="fastMode" class="form-checkbox h-3.5 w-3.5 rounded text-emerald-500 bg-slate-900 border-slate-700 focus:ring-0 focus:ring-offset-0 cursor-pointer">
                     Fast Mode
@@ -1386,6 +1498,10 @@ if ($file_age > $expiration_time) {
                 viewMode: 'all',
                 agentSearch: '',
                 token: new URLSearchParams(window.location.search).get('token') || '',
+                version: '<?php echo \WPDiagnose\Core\Version::current(); ?>',
+                latestVersion: '',
+                updateAvailable: false,
+                updatingSelf: false,
                 threatIntelApiKeyDraft: '',
                 notifications: [],
                 notificationSeed: 0,
@@ -1413,6 +1529,7 @@ if ($file_age > $expiration_time) {
                         localStorage.setItem('wpd_fast_mode', val ? 'true' : 'false');
                     });
                     this.fetchReport();
+                    this.checkForUpdates();
                 },
                 displayAgentLabel(agent) {
                     const labels = {
@@ -1513,6 +1630,48 @@ if ($file_age > $expiration_time) {
                     const success = await this.attemptFix('MailAgent', 'send_test_mail:' + this.testEmailInput.trim());
                     if (success) {
                         this.testEmailInput = '';
+                    }
+                },
+                async checkForUpdates() {
+                    try {
+                        const response = await fetch('https://raw.githubusercontent.com/BigDesigner/wordpress-diagnose-tool/main/VERSION');
+                        if (response.ok) {
+                            const latest = (await response.text()).trim();
+                            if (latest && latest !== this.version) {
+                                this.latestVersion = latest;
+                                this.updateAvailable = true;
+                            }
+                        }
+                    } catch (e) {}
+                },
+                async performSelfUpdate() {
+                    if (this.updatingSelf) return;
+                    const confirmed = await this.askConfirmation({
+                        title: 'Self-Update',
+                        body: `Are you sure you want to update WordPress Diagnose Tool to version ${this.latestVersion}? This will overwrite the current script file.`,
+                        confirmLabel: 'Update Now',
+                        danger: true
+                    });
+                    if (!confirmed) return;
+
+                    this.updatingSelf = true;
+                    this.notify('Downloading and applying update...', 'info');
+
+                    try {
+                        const response = await fetch(`?token=${this.token}&action=self_update&version=${encodeURIComponent(this.latestVersion)}&format=json`);
+                        const result = await response.json();
+                        if (result.success) {
+                            this.notify(result.message || 'Update applied successfully!', 'success');
+                            setTimeout(() => {
+                                window.location.reload();
+                            }, 1500);
+                        } else {
+                            this.notify(result.message || 'Failed to apply update.', 'error');
+                        }
+                    } catch (e) {
+                        this.notify('An error occurred during update.', 'error');
+                    } finally {
+                        this.updatingSelf = false;
                     }
                 },
                 notify(message, type = 'info', timeout = 4500) {
