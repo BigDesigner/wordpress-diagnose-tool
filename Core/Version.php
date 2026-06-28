@@ -5,7 +5,7 @@ namespace WPDiagnose\Core;
 
 final class Version
 {
-    public const NUMBER = '1.2.0';
+    public const NUMBER = '1.2.1';
 
     public static function current(): string
     {

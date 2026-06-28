@@ -251,7 +251,7 @@ final class AgentSmokeTest extends TestCase
         $report = (new MalwareInspector())->check();
 
         self::assertSame('ERROR', $report['malware_summary']['status']);
-        self::assertContains('wp-content/uploads/2026/03/u5.php', $report['php_in_uploads']['data']);
+        self::assertContains('wp-content/uploads/2026/03/u5.php', $report['rogue_php_in_content']['data']);
         self::assertContains('wp7.php', $report['unexpected_root_php']['data']);
     }
 
@@ -321,5 +321,11 @@ final class AgentSmokeTest extends TestCase
         $update = new \WPDiagnose\Agents\UpdateRiskAgent\UpdateRiskAgent(false);
         $res = $update->check();
         self::assertArrayHasKey('update_status', $res);
+
+        $phpInfo = new \WPDiagnose\Agents\PHPInfoAgent\PHPInfoAgent(false);
+        $res = $phpInfo->check();
+        self::assertArrayHasKey('core_config', $res);
+        self::assertArrayHasKey('security_hardening', $res);
+        self::assertArrayHasKey('extensions_status', $res);
     }
 }
