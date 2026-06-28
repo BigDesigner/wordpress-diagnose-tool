@@ -135,6 +135,10 @@ final class ThreatIntelAgent implements DiagnosticInterface
             return $this->refreshThreatFeed();
         }
 
+        if ($id === 'import_threat_feed') {
+            return $this->importThreatFeed();
+        }
+
         return false;
     }
 
@@ -300,6 +304,48 @@ final class ThreatIntelAgent implements DiagnosticInterface
                 ? sprintf('Threat intelligence feed synced successfully using the %s feed.', $selectedFeed)
                 : 'Threat intelligence feed was downloaded but could not be cached locally.',
             'data' => $success ? ['records' => count($normalized), 'feed_type' => $selectedFeed] : null,
+        ];
+        return $success;
+    }
+
+    private function importThreatFeed(): bool
+    {
+        $normalizedFeed = $_POST['normalized_feed'] ?? $_GET['normalized_feed'] ?? '';
+        $data = json_decode($normalizedFeed, true);
+        if (!is_array($data)) {
+            $this->lastActionResult = [
+                'success' => false,
+                'message' => 'Invalid JSON payload received.',
+                'data' => null,
+            ];
+            return false;
+        }
+
+        $cacheFile = $this->getCacheFilePath();
+        $cacheDir = dirname($cacheFile);
+        if (!is_dir($cacheDir)) {
+            @mkdir($cacheDir, 0755, true);
+        }
+
+        $written = @file_put_contents($cacheFile, json_encode([
+            'updated_at' => gmdate('c'),
+            'feed_type' => 'manual_import',
+            'records' => $data,
+        ], JSON_UNESCAPED_SLASHES));
+
+        $success = $written !== false;
+        if ($success) {
+            $this->saveFeedState([
+                'cooldown_until' => 0,
+                'last_error' => '',
+                'last_success_at' => time(),
+            ]);
+        }
+
+        $this->lastActionResult = [
+            'success' => $success,
+            'message' => $success ? 'Normalized feed imported successfully.' : 'Failed to write cache file.',
+            'data' => $success ? ['records' => count($data), 'feed_type' => 'manual_import'] : null,
         ];
         return $success;
     }

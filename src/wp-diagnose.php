@@ -954,6 +954,10 @@ $serverTz = $serverTimeObj->format('T');
                                                         ? 'border-sky-500/40 bg-sky-500/10 text-sky-300 hover:bg-sky-500/20'
                                                         : 'border-slate-700 bg-slate-800 text-slate-500 cursor-not-allowed'"
                                                 >Sync Feed</button>
+                                                <label class="cursor-pointer rounded border border-slate-700 bg-slate-800 px-4 py-2 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-300 hover:bg-slate-700 hover:text-white transition flex items-center gap-1.5">
+                                                    Import JSON File
+                                                    <input type="file" accept=".json" @change="importFeedFile($event)" class="hidden">
+                                                </label>
                                                 <div class="text-[11px] text-slate-500">
                                                     Feed cache: <span class="text-slate-200" x-text="finding.data.cache_status"></span>
                                                 </div>
@@ -1916,6 +1920,74 @@ $serverTz = $serverTimeObj->format('T');
                     return this.attemptFix('ThreatIntelAgent', 'refresh_threat_feed', {}, {
                         skipConfirm: true
                     });
+                },
+                async importFeedFile(event) {
+                    const file = event.target.files[0];
+                    if (!file) return;
+                    
+                    this.loading = true;
+                    const reader = new FileReader();
+                    reader.onload = async (e) => {
+                        try {
+                            const rawJson = JSON.parse(e.target.result);
+                            let payload = null;
+                            if (typeof rawJson === 'object' && rawJson !== null) {
+                                payload = rawJson;
+                            }
+                            
+                            if (!payload) {
+                                throw new Error('Invalid Wordfence feed format.');
+                            }
+                            
+                            const normalized = {};
+                            let count = 0;
+                            for (const [id, record] of Object.entries(payload)) {
+                                if (!record || !Array.isArray(record.software)) continue;
+                                
+                                const softwareRecords = [];
+                                for (const software of record.software) {
+                                    if (!software || !software.type || !software.slug || !software.affected_versions) continue;
+                                    softwareRecords.push({
+                                        type: software.type,
+                                        name: software.name || software.slug,
+                                        slug: software.slug,
+                                        affected_versions: software.affected_versions,
+                                        patched_versions: software.patched_versions || []
+                                    });
+                                }
+                                
+                                if (softwareRecords.length === 0) continue;
+                                count++;
+                                normalized[id] = {
+                                    title: record.title || 'Unknown vulnerability',
+                                    software: softwareRecords,
+                                    cve: record.cve || null,
+                                    cvss: record.cvss || {},
+                                    references: record.references || [],
+                                    published: record.published || null
+                                };
+                            }
+                            
+                            if (count === 0) {
+                                throw new Error('No valid vulnerability records found in the file.');
+                            }
+                            
+                            const success = await this.attemptFix('ThreatIntelAgent', 'import_threat_feed', {
+                                normalized_feed: JSON.stringify(normalized)
+                            }, { skipConfirm: true });
+                            
+                            if (success) {
+                                this.notify('Successfully imported ' + count + ' CVE records from file!', 'success');
+                                await this.fetchReport();
+                            }
+                        } catch (err) {
+                            this.notify('Import failed: ' + err.message, 'error');
+                        } finally {
+                            this.loading = false;
+                            event.target.value = '';
+                        }
+                    };
+                    reader.readAsText(file);
                 },
                 async attemptFix(agent, id, params = {}, options = {}) {
                     const skipConfirm = options.skipConfirm === true || this.fastMode;
