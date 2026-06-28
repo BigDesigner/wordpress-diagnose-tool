@@ -1,4 +1,4 @@
-# WordPress Diagnose Tool (v1.1.8)
+# WordPress Diagnose Tool (v1.1.9)
 
 **WordPress Diagnose Tool** is an emergency-ready, zero-dependency diagnostics and recovery toolkit built for real-world outage, compromise, and maintenance scenarios. It ships as a modular PHP codebase for development and compiles into a **single-file production bundle** (`wp-diagnose-pro.php`) for fast drop-in deployment on live sites.
 
@@ -33,7 +33,7 @@ Enable "Fast Mode" via the header toggle to skip confirmation modals on repetiti
 
 ---
 
-## 🛠️ The 23 Diagnostic Agents
+## 🛠️ The 24 Diagnostic Agents
 
 The tool orchestrates checks and actions across specialized modular agents:
 - **ServerInspector**: Audits PHP versions, loaded extensions, memory limits, and execution timers.
@@ -59,6 +59,7 @@ The tool orchestrates checks and actions across specialized modular agents:
 - **IntegrityRepairAgent**: Restores standard `.htaccess`/`index.php` configurations and provides the custom File Editor.
 - **DatabaseRepairAgent**: Performs physical SQL table repairs and runs the **Serialized Search & Replace** engine.
 - **UpdateRiskAgent**: Assesses compatibility risks of pending plugin, theme, and core updates.
+- **PHPInfoAgent**: Audits PHP configuration settings, extension modules, and security parameters.
 
 ---
 

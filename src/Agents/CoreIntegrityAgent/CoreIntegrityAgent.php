@@ -73,6 +73,11 @@ class CoreIntegrityAgent implements DiagnosticInterface
                 'info'   => "All core files match exactly with official WordPress $version.",
             ];
         } else {
+            $this->results['unknown_files'] = [
+                'status' => empty($unknown) ? 'OK' : 'WARN',
+                'info'   => count($unknown) . " unexpected file(s) found in core directories.",
+                'data'   => $unknown,
+            ];
             $this->results['mismatch_files'] = [
                 'status' => empty($mismatch) ? 'OK' : 'ERROR',
                 'info'   => count($mismatch) . " file(s) modified.",
@@ -82,11 +87,6 @@ class CoreIntegrityAgent implements DiagnosticInterface
                 'status' => empty($missing) ? 'OK' : 'ERROR',
                 'info'   => count($missing) . " file(s) missing.",
                 'data'   => $missing,
-            ];
-            $this->results['unknown_files'] = [
-                'status' => empty($unknown) ? 'OK' : 'WARN',
-                'info'   => count($unknown) . " unexpected file(s) found in core directories.",
-                'data'   => $unknown,
             ];
         }
 
