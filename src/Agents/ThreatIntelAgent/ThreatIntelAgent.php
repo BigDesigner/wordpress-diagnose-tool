@@ -74,6 +74,11 @@ final class ThreatIntelAgent implements DiagnosticInterface
                 'php_max_execution_time' => ini_get('max_execution_time'),
                 'memory_ok' => $this->checkMemoryLimitMet(),
                 'time_limit_ok' => $this->checkTimeLimitMet(),
+                'inventory_slugs' => [
+                    'core' => ['wordpress'],
+                    'plugins' => array_keys($inventory['plugins']),
+                    'themes' => array_keys($inventory['themes']),
+                ],
             ],
         ];
 

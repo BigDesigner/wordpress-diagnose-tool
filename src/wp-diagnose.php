@@ -1939,6 +1939,14 @@ $serverTz = $serverTimeObj->format('T');
                                 throw new Error('Invalid Wordfence feed format.');
                             }
                             
+                            const config = this.reports?.ThreatIntelAgent?.intel_configuration?.data;
+                            const slugs = config?.inventory_slugs;
+                            const hasSlugsFilter = slugs && (Array.isArray(slugs.plugins) || Array.isArray(slugs.themes));
+                            
+                            const pluginSlugs = new Set((slugs?.plugins || []).map(s => String(s).toLowerCase()));
+                            const themeSlugs = new Set((slugs?.themes || []).map(s => String(s).toLowerCase()));
+                            const coreSlugs = new Set((slugs?.core || ['wordpress']).map(s => String(s).toLowerCase()));
+                            
                             const normalized = {};
                             let count = 0;
                             for (const [id, record] of Object.entries(payload)) {
@@ -1947,6 +1955,15 @@ $serverTz = $serverTimeObj->format('T');
                                 const softwareRecords = [];
                                 for (const software of record.software) {
                                     if (!software || !software.type || !software.slug || !software.affected_versions) continue;
+                                    
+                                    if (hasSlugsFilter) {
+                                        const type = String(software.type).toLowerCase();
+                                        const slug = String(software.slug).toLowerCase();
+                                        if (type === 'plugin' && !pluginSlugs.has(slug)) continue;
+                                        if (type === 'theme' && !themeSlugs.has(slug)) continue;
+                                        if (type === 'core' && !coreSlugs.has(slug)) continue;
+                                    }
+                                    
                                     softwareRecords.push({
                                         type: software.type,
                                         name: software.name || software.slug,
@@ -1969,7 +1986,7 @@ $serverTz = $serverTimeObj->format('T');
                             }
                             
                             if (count === 0) {
-                                throw new Error('No valid vulnerability records found in the file.');
+                                throw new Error('No vulnerability records matching your installed plugins, themes, or WordPress core were found in the file.');
                             }
                             
                             const success = await this.attemptFix('ThreatIntelAgent', 'import_threat_feed', {
@@ -1977,7 +1994,7 @@ $serverTz = $serverTimeObj->format('T');
                             }, { skipConfirm: true });
                             
                             if (success) {
-                                this.notify('Successfully imported ' + count + ' CVE records from file!', 'success');
+                                this.notify('Successfully imported ' + count + ' matched CVE records from the 140MB feed!', 'success');
                                 await this.fetchReport();
                             }
                         } catch (err) {
