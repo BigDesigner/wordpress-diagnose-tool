@@ -967,6 +967,27 @@ if ($file_age > $expiration_time) {
                                                 <div>Saved key: <span class="text-slate-200" x-text="finding.data.api_key_hint"></span></div>
                                                 <div>Last successful sync: <span class="text-slate-200" x-text="finding.data.last_success_at"></span></div>
                                             </div>
+
+                                            <div class="border-t border-slate-800/80 pt-3 text-[10px] text-slate-500 space-y-1.5 font-mono">
+                                                <div class="flex items-center gap-2">
+                                                    <span>PHP Memory Limit: <strong class="text-slate-300" x-text="finding.data.php_memory_limit || 'Unlimited'"></strong> (Required >= 256M to process sync)</span>
+                                                    <template x-if="finding.data.memory_ok">
+                                                        <span class="text-emerald-400 font-bold bg-emerald-500/10 px-1 py-0.5 rounded border border-emerald-500/20 text-[9px] uppercase tracking-wide">TRUE</span>
+                                                    </template>
+                                                    <template x-if="!finding.data.memory_ok">
+                                                        <span class="text-rose-400 font-bold bg-rose-500/10 px-1 py-0.5 rounded border border-rose-500/20 text-[9px] uppercase tracking-wide">FALSE (Low Memory)</span>
+                                                    </template>
+                                                </div>
+                                                <div class="flex items-center gap-2">
+                                                    <span>PHP Max Execution Time: <strong class="text-slate-300" x-text="finding.data.php_max_execution_time ? (finding.data.php_max_execution_time + 's') : 'Unlimited'"></strong> (Required >= 60s to process sync)</span>
+                                                    <template x-if="finding.data.time_limit_ok">
+                                                        <span class="text-emerald-400 font-bold bg-emerald-500/10 px-1 py-0.5 rounded border border-emerald-500/20 text-[9px] uppercase tracking-wide">TRUE</span>
+                                                    </template>
+                                                    <template x-if="!finding.data.time_limit_ok">
+                                                        <span class="text-rose-400 font-bold bg-rose-500/10 px-1 py-0.5 rounded border border-rose-500/20 text-[9px] uppercase tracking-wide">FALSE (Low Time Limit)</span>
+                                                    </template>
+                                                </div>
+                                            </div>
                                         </div>
                                     </template>
                                     

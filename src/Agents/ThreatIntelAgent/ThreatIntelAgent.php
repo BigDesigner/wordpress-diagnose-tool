@@ -70,6 +70,10 @@ final class ThreatIntelAgent implements DiagnosticInterface
                 'cooldown_until' => $stateMeta['cooldown_until'],
                 'last_error' => $stateMeta['last_error'],
                 'last_success_at' => $stateMeta['last_success_at'],
+                'php_memory_limit' => ini_get('memory_limit'),
+                'php_max_execution_time' => ini_get('max_execution_time'),
+                'memory_ok' => $this->checkMemoryLimitMet(),
+                'time_limit_ok' => $this->checkTimeLimitMet(),
             ],
         ];
 
@@ -979,5 +983,35 @@ final class ThreatIntelAgent implements DiagnosticInterface
         }
 
         return 'Wordfence returned an empty response. This is usually an outbound HTTPS or host-level filtering issue.';
+    }
+
+    private function checkMemoryLimitMet(): bool
+    {
+        $limit = ini_get('memory_limit');
+        if (!$limit || $limit === '-1') {
+            return true;
+        }
+        $val = trim($limit);
+        $last = strtolower($val[strlen($val)-1]);
+        $val = (int)$val;
+        switch($last) {
+            case 'g':
+                $val *= 1024;
+            case 'm':
+                $val *= 1024;
+            case 'k':
+                $val *= 1024;
+        }
+        return $val >= 268435456;
+    }
+
+    private function checkTimeLimitMet(): bool
+    {
+        $limit = ini_get('max_execution_time');
+        if ($limit === false) {
+            return true;
+        }
+        $val = (int)$limit;
+        return $val === 0 || $val >= 60;
     }
 }
