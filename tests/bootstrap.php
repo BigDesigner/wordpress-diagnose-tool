@@ -31,6 +31,7 @@ require_once $projectRoot . '/src/Agents/MailAgent/MailAgent.php';
 require_once $projectRoot . '/src/Agents/IntegrityRepairAgent/IntegrityRepairAgent.php';
 require_once $projectRoot . '/src/Agents/DatabaseRepairAgent/DatabaseRepairAgent.php';
 require_once $projectRoot . '/src/Agents/UpdateRiskAgent/UpdateRiskAgent.php';
+require_once $projectRoot . '/src/Agents/PHPInfoAgent/PHPInfoAgent.php';
 
 if (!defined('WPD_TEST_ROOT')) {
     define('WPD_TEST_ROOT', sys_get_temp_dir() . '/wp-diagnose-tests-root/');
