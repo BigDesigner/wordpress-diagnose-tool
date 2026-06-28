@@ -618,6 +618,11 @@ if ($file_age > $expiration_time) {
 }
 // -------------------- End Self-Destruct --------------------
 
+$originalTz = @date_default_timezone_get() ?: 'UTC';
+$serverTimeObj = new DateTime('now', new DateTimeZone($originalTz));
+$serverOffset = $serverTimeObj->getOffset();
+$serverTz = $serverTimeObj->format('T');
+
 @header('Content-Type: text/html; charset=utf-8');
 @date_default_timezone_set('UTC');
 
@@ -856,6 +861,12 @@ if ($file_age > $expiration_time) {
                     <template x-if="viewMode === 'single' && activeTab !== 'all'">
                         <span class="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-emerald-300" x-text="displayAgentLabel(activeTab)"></span>
                     </template>
+                    <span class="h-3 w-px bg-slate-700/60 hidden md:inline-block"></span>
+                    <div class="flex flex-wrap items-center gap-3 text-[10px] font-mono text-slate-500">
+                        <span>Server Time: <strong class="text-slate-300" x-text="currentTimeString"></strong></span>
+                        <span>TR Time: <strong class="text-slate-300" x-text="trTimeString"></strong></span>
+                        <span>UTC Time: <strong class="text-slate-300" x-text="utcTimeString"></strong></span>
+                    </div>
                 </div>
             </div>
 
@@ -1532,6 +1543,11 @@ if ($file_age > $expiration_time) {
                 updateAvailable: false,
                 updatingSelf: false,
                 threatIntelApiKeyDraft: '',
+                serverOffset: <?php echo (int) $serverOffset; ?>,
+                serverZone: <?php echo json_encode($serverTz); ?>,
+                currentTimeString: '',
+                trTimeString: '',
+                utcTimeString: '',
                 notifications: [],
                 notificationSeed: 0,
                 quarantinePathInput: '',
@@ -1559,6 +1575,23 @@ if ($file_age > $expiration_time) {
                     });
                     this.fetchReport();
                     this.checkForUpdates();
+                    this.startClocks();
+                },
+                startClocks() {
+                    const pad = (n) => String(n).padStart(2, '0');
+                    const update = () => {
+                        const now = new Date();
+                        const utc = new Date(now.getTime() + now.getTimezoneOffset() * 60000);
+                        this.utcTimeString = pad(utc.getHours()) + ':' + pad(utc.getMinutes()) + ':' + pad(utc.getSeconds());
+                        
+                        const tr = new Date(utc.getTime() + 3 * 3600000);
+                        this.trTimeString = pad(tr.getHours()) + ':' + pad(tr.getMinutes()) + ':' + pad(tr.getSeconds());
+                        
+                        const sv = new Date(utc.getTime() + this.serverOffset * 1000);
+                        this.currentTimeString = pad(sv.getHours()) + ':' + pad(sv.getMinutes()) + ':' + pad(sv.getSeconds()) + ' (' + this.serverZone + ')';
+                    };
+                    update();
+                    setInterval(update, 1000);
                 },
                 displayAgentLabel(agent) {
                     const labels = {
