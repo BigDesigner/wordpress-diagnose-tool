@@ -1,4 +1,4 @@
-# WordPress Diagnose Tool (v1.0.5)
+# WordPress Diagnose Tool (v1.0.6)
 
 **WordPress Diagnose Tool** is an emergency-ready, zero-dependency diagnostics and recovery toolkit built for real-world outage, compromise, and maintenance scenarios. It ships as a modular PHP codebase for development and compiles into a **single-file production bundle** (`wp-diagnose-pro.php`) for fast drop-in deployment on live sites.
 
