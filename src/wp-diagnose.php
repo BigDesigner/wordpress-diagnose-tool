@@ -737,40 +737,43 @@ if ($file_age > $expiration_time) {
         </div>
 
         <!-- Header -->
-        <header class="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center mb-10 border-b border-slate-700 pb-6 gap-4">
-            <div>
-                <h1 class="text-3xl font-black text-emerald-500 flex items-center gap-3">
-                    <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
-                    WORDPRESS DIAGNOSE TOOL <span class="text-sm font-mono bg-slate-800 text-slate-400 px-3 py-1 rounded-full"><?php echo \WPDiagnose\Core\Version::label(); ?></span>
-                </h1>
-                <p class="text-slate-500 text-xs mt-1 font-mono uppercase tracking-widest">Advanced Diagnostic Agents Swarm</p>
+        <header class="max-w-6xl mx-auto flex flex-col lg:flex-row justify-between items-center mb-10 border-b border-slate-700 pb-6 gap-4">
+            <div class="flex items-center gap-3 w-full lg:w-auto">
+                <svg class="w-7 h-7 text-emerald-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
+                <div class="truncate">
+                    <h1 class="text-xl md:text-2xl font-black text-emerald-500 flex items-center gap-2 whitespace-nowrap">
+                        WORDPRESS DIAGNOSE TOOL 
+                        <span class="text-[10px] font-mono bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full border border-slate-700/60"><?php echo \WPDiagnose\Core\Version::label(); ?></span>
+                    </h1>
+                    <p class="text-slate-500 text-[10px] font-mono uppercase tracking-widest">Advanced Diagnostic Agents Swarm</p>
+                </div>
             </div>
             
-            <div class="flex flex-wrap gap-3 items-center justify-end">
+            <div class="flex flex-wrap lg:flex-nowrap gap-2 items-center justify-end w-full lg:w-auto">
                 <template x-if="updateAvailable">
                     <button type="button" 
                             @click="performSelfUpdate()" 
                             :disabled="updatingSelf"
-                            class="bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white px-4 py-2 rounded text-sm font-semibold transition flex items-center gap-2 animate-pulse">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            class="bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white px-2.5 py-1.5 rounded text-xs font-semibold transition flex items-center gap-1.5 shrink-0 animate-pulse">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
                         </svg>
                         <span x-text="'Update ' + latestVersion"></span>
                     </button>
                 </template>
-                <label class="flex items-center gap-2 text-xs font-semibold text-slate-400 cursor-pointer bg-slate-800 border border-slate-700/80 px-3 py-2 rounded select-none hover:border-slate-600 transition">
-                    <input type="checkbox" x-model="fastMode" class="form-checkbox h-3.5 w-3.5 rounded text-emerald-500 bg-slate-900 border-slate-700 focus:ring-0 focus:ring-offset-0 cursor-pointer">
+                <label class="flex items-center gap-1.5 text-[11px] font-semibold text-slate-400 cursor-pointer bg-slate-800 border border-slate-700/80 px-2.5 py-1.5 rounded select-none hover:border-slate-600 transition shrink-0">
+                    <input type="checkbox" x-model="fastMode" class="form-checkbox h-3 w-3 rounded text-emerald-500 bg-slate-900 border-slate-700 focus:ring-0 focus:ring-offset-0 cursor-pointer">
                     Fast Mode
                 </label>
-                <a :href="'?token=' + token + '&action=export_ai_report'" download class="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded text-sm font-semibold transition flex items-center gap-2">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                <a :href="'?token=' + token + '&action=export_ai_report'" download class="bg-emerald-600 hover:bg-emerald-500 text-white px-2.5 py-1.5 rounded text-xs font-semibold transition flex items-center gap-1.5 shrink-0">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
                     Export AI Report
                 </a>
-                <button type="button" @click="fetchReport()" :disabled="loading" class="bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white px-4 py-2 rounded text-sm font-semibold transition flex items-center gap-2">
-                    <svg class="w-4 h-4" :class="loading ? 'animate-spin' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                <button type="button" @click="fetchReport()" :disabled="loading" class="bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white px-2.5 py-1.5 rounded text-xs font-semibold transition flex items-center gap-1.5 shrink-0">
+                    <svg class="w-3.5 h-3.5" :class="loading ? 'animate-spin' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
                     Refresh
                 </button>
-                <button type="button" @click="selfDestruct()" class="bg-red-600/20 hover:bg-red-600 text-red-500 hover:text-white border border-red-600/50 px-4 py-2 rounded text-sm font-bold transition">Self-Destruct</button>
+                <button type="button" @click="selfDestruct()" class="bg-red-600/20 hover:bg-red-600 text-red-500 hover:text-white border border-red-600/50 px-2.5 py-1.5 rounded text-xs font-bold transition shrink-0">Self-Destruct</button>
             </div>
         </header>
 
