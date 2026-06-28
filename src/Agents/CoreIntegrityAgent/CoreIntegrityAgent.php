@@ -52,7 +52,7 @@ class CoreIntegrityAgent implements DiagnosticInterface
         $missing  = [];
         foreach ($checksums as $file => $hash) {
             // Only check wp-admin and wp-includes to avoid wp-content false positives
-            if (strpos($file, 'wp-admin/') !== 0 && strpos($file, 'wp-includes/') !== 0 && strpos($file, 'wp-') !== 0) {
+            if (!str_starts_with($file, 'wp-admin/') && !str_starts_with($file, 'wp-includes/') && !str_starts_with($file, 'wp-')) {
                 continue;
             }
             if ($file === 'wp-config-sample.php') continue;
@@ -123,7 +123,7 @@ class CoreIntegrityAgent implements DiagnosticInterface
         
         $context = stream_context_create([
             'http' => ['timeout' => 5],
-            'ssl'  => ['verify_peer' => false, 'verify_peer_name' => false]
+            'ssl'  => ['verify_peer' => true, 'verify_peer_name' => true],
         ]);
 
         $response = @file_get_contents($url, false, $context);
@@ -159,7 +159,7 @@ class CoreIntegrityAgent implements DiagnosticInterface
         foreach ($iterator as $fileInfo) {
             if ($fileInfo->isDot() || $fileInfo->isDir()) continue;
             $filename = $fileInfo->getFilename();
-            if (strpos($filename, 'wp-') === 0 && preg_match('/\.php$/', $filename)) {
+            if (str_starts_with($filename, 'wp-') && str_ends_with($filename, '.php')) {
                 if ($filename === 'wp-config.php' || $filename === 'wp-config-sample.php' || $filename === 'wp-diagnose.php' || $filename === 'wp-diagnose-pro.php') continue;
                 if (!isset($checksums[$filename])) {
                     $unknown[] = $filename;

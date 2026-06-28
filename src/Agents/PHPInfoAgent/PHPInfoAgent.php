@@ -10,15 +10,13 @@ use WPDiagnose\Core\DiagnosticInterface;
  * 
  * Audits server's PHP configuration settings, extension modules, and security parameters.
  */
-class PHPInfoAgent implements DiagnosticInterface
+final class PHPInfoAgent implements DiagnosticInterface
 {
     private array $results = [];
-    private bool $wpLoaded = false;
-    private ?array $lastActionResult = null;
 
-    public function __construct(bool $wpLoaded = false)
+    public function __construct()
     {
-        $this->wpLoaded = $wpLoaded;
+        // No dependencies — all PHP runtime data is globally accessible
     }
 
     public function getName(): string
@@ -43,7 +41,7 @@ class PHPInfoAgent implements DiagnosticInterface
                 'Post Max Size' => ini_get('post_max_size') ?: 'n/a',
                 'Open Basedir' => ini_get('open_basedir') ?: 'None',
                 'Disable Functions' => ini_get('disable_functions') ?: 'None',
-                'OPcache Enabled' => function_exists('opcache_get_status') && @opcache_get_status(false) ? 'Yes' : 'No',
+                'OPcache Enabled' => (function_exists('opcache_get_status') && (@opcache_get_status(false) !== false)) ? 'Yes' : 'No',
             ]
         ];
 
@@ -112,6 +110,6 @@ class PHPInfoAgent implements DiagnosticInterface
 
     public function getLastActionResult(): ?array
     {
-        return null;
+        return null; // PHPInfoAgent has no fix actions
     }
 }

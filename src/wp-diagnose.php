@@ -64,7 +64,7 @@ if (defined('WP_CLI') && WP_CLI) {
         $engine->registerAgent(new \WPDiagnose\Agents\IntegrityRepairAgent\IntegrityRepairAgent());
         $engine->registerAgent(new \WPDiagnose\Agents\DatabaseRepairAgent\DatabaseRepairAgent(true));
         $engine->registerAgent(new \WPDiagnose\Agents\UpdateRiskAgent\UpdateRiskAgent(true));
-        $engine->registerAgent(new \WPDiagnose\Agents\PHPInfoAgent\PHPInfoAgent(true));
+        $engine->registerAgent(new \WPDiagnose\Agents\PHPInfoAgent\PHPInfoAgent());
 
         if (isset($assoc_args['fix'])) {
             $agent = $assoc_args['agent'] ?? 'ServerInspector';
@@ -400,7 +400,7 @@ if ($is_json || isset($_GET['action'])) {
         $engine->registerAgent(new \WPDiagnose\Agents\IntegrityRepairAgent\IntegrityRepairAgent());
         $engine->registerAgent(new \WPDiagnose\Agents\DatabaseRepairAgent\DatabaseRepairAgent($WP_LOADED));
         $engine->registerAgent(new \WPDiagnose\Agents\UpdateRiskAgent\UpdateRiskAgent($WP_LOADED));
-        $engine->registerAgent(new \WPDiagnose\Agents\PHPInfoAgent\PHPInfoAgent($WP_LOADED));
+        $engine->registerAgent(new \WPDiagnose\Agents\PHPInfoAgent\PHPInfoAgent());
 
         $response = ['success' => true, 'message' => '', 'data' => []];
 

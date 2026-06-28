@@ -322,7 +322,7 @@ final class AgentSmokeTest extends TestCase
         $res = $update->check();
         self::assertArrayHasKey('update_status', $res);
 
-        $phpInfo = new \WPDiagnose\Agents\PHPInfoAgent\PHPInfoAgent(false);
+        $phpInfo = new \WPDiagnose\Agents\PHPInfoAgent\PHPInfoAgent();
         $res = $phpInfo->check();
         self::assertArrayHasKey('core_config', $res);
         self::assertArrayHasKey('security_hardening', $res);
