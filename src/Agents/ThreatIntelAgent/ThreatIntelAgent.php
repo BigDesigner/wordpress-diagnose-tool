@@ -253,7 +253,8 @@ final class ThreatIntelAgent implements DiagnosticInterface
             if (($lastFailure['status'] ?? 0) === 429) {
                 $stateUpdate['cooldown_until'] = time() + self::RATE_LIMIT_COOLDOWN_SECONDS;
             } else {
-                $stateUpdate['cooldown_until'] = 0;
+                // Safety cooldown: 2 minutes to prevent rapid retry loops on temporary errors
+                $stateUpdate['cooldown_until'] = time() + 120;
             }
             $this->saveFeedState($stateUpdate);
 
@@ -285,11 +286,13 @@ final class ThreatIntelAgent implements DiagnosticInterface
 
         $success = $written !== false;
         $this->saveFeedState($success ? [
-            'cooldown_until' => 0,
+            // Success cooldown: 1 hour (3600 seconds) to prevent redundant rapid requests
+            'cooldown_until' => time() + 3600,
             'last_error' => '',
             'last_success_at' => time(),
         ] : [
             'last_error' => 'Threat intelligence feed was downloaded but could not be cached locally.',
+            'cooldown_until' => time() + 120, // Failed writing cache, cool down for 2 minutes
         ]);
         $this->lastActionResult = [
             'success' => $success,
