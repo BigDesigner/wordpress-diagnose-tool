@@ -1994,8 +1994,7 @@ $serverTz = $serverTimeObj->format('T');
                             }, { skipConfirm: true });
                             
                             if (success) {
-                                const sizeInMB = (file.size / (1024 * 1024)).toFixed(1);
-                                this.notify('Successfully imported ' + count + ' matched CVE records from the ' + sizeInMB + 'MB file!', 'success');
+                                this.notify('Successfully imported ' + count + ' matched CVE records from ' + file.name + '!', 'success');
                                 await this.fetchReport();
                             }
                         } catch (err) {
