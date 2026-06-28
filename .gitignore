@@ -40,3 +40,6 @@ repomix-output.xml
 
 # Large Raw DB Files
 wordfence-db/
+
+# Local Temporary Files
+temp/
