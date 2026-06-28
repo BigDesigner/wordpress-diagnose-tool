@@ -50,6 +50,7 @@ $coreModules = [
     'src/Agents/IntegrityRepairAgent/IntegrityRepairAgent.php',
     'src/Agents/DatabaseRepairAgent/DatabaseRepairAgent.php',
     'src/Agents/UpdateRiskAgent/UpdateRiskAgent.php',
+    'src/Agents/PHPInfoAgent/PHPInfoAgent.php',
 ];
 
 // Procedural entry point

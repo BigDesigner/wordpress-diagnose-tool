@@ -35,6 +35,7 @@ require_once __DIR__ . '/Agents/MailAgent/MailAgent.php';
 require_once __DIR__ . '/Agents/IntegrityRepairAgent/IntegrityRepairAgent.php';
 require_once __DIR__ . '/Agents/DatabaseRepairAgent/DatabaseRepairAgent.php';
 require_once __DIR__ . '/Agents/UpdateRiskAgent/UpdateRiskAgent.php';
+require_once __DIR__ . '/Agents/PHPInfoAgent/PHPInfoAgent.php';
 
 // -------------------- WP-CLI INTEGRATION --------------------
 if (defined('WP_CLI') && WP_CLI) {
@@ -63,6 +64,7 @@ if (defined('WP_CLI') && WP_CLI) {
         $engine->registerAgent(new \WPDiagnose\Agents\IntegrityRepairAgent\IntegrityRepairAgent());
         $engine->registerAgent(new \WPDiagnose\Agents\DatabaseRepairAgent\DatabaseRepairAgent(true));
         $engine->registerAgent(new \WPDiagnose\Agents\UpdateRiskAgent\UpdateRiskAgent(true));
+        $engine->registerAgent(new \WPDiagnose\Agents\PHPInfoAgent\PHPInfoAgent(true));
 
         if (isset($assoc_args['fix'])) {
             $agent = $assoc_args['agent'] ?? 'ServerInspector';
@@ -398,6 +400,7 @@ if ($is_json || isset($_GET['action'])) {
         $engine->registerAgent(new \WPDiagnose\Agents\IntegrityRepairAgent\IntegrityRepairAgent());
         $engine->registerAgent(new \WPDiagnose\Agents\DatabaseRepairAgent\DatabaseRepairAgent($WP_LOADED));
         $engine->registerAgent(new \WPDiagnose\Agents\UpdateRiskAgent\UpdateRiskAgent($WP_LOADED));
+        $engine->registerAgent(new \WPDiagnose\Agents\PHPInfoAgent\PHPInfoAgent($WP_LOADED));
 
         $response = ['success' => true, 'message' => '', 'data' => []];
 
@@ -1621,7 +1624,8 @@ $serverTz = $serverTimeObj->format('T');
                         MailAgent: 'Mail Diagnostics',
                         IntegrityRepairAgent: 'Integrity Repair',
                         DatabaseRepairAgent: 'Database Repair',
-                        UpdateRiskAgent: 'Update Risk Analyser'
+                        UpdateRiskAgent: 'Update Risk Analyser',
+                        PHPInfoAgent: 'PHP Info'
                     };
                     if (labels[agent]) {
                         return labels[agent];
