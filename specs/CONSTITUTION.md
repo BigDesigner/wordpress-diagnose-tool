@@ -1,7 +1,7 @@
-# WordPress Diagnose Tool - Standard Constitution (v1.1.6)
+# WordPress Diagnose Tool - Standard Constitution (v1.1.7)
 
 ## The Law of Namespacing
-As of version 1.1.6, the **Bracketed Namespace** structure is the absolute standard for all code within this project.
+As of version 1.1.7, the **Bracketed Namespace** structure is the absolute standard for all code within this project.
 
 ### 1. Mandatory Bracketed Syntax
 All modules must be encapsulated within bracketed namespace blocks:

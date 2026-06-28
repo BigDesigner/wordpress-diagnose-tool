@@ -913,8 +913,8 @@ $serverTz = $serverTimeObj->format('T');
                                             <div class="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
                                                 <div>
                                                     <div class="text-xs font-bold uppercase tracking-[0.25em] text-emerald-400">Wordfence Intelligence</div>
-                                                    <div class="mt-1 text-xs text-slate-400">
-                                                        Add a free API key to enable the live WordPress CVE feed. Without a key, this section stays passive.
+                                                    <div class="mt-1.5 text-xs text-slate-400 leading-relaxed">
+                                                        Add a free API key to enable the live WordPress CVE feed. Alternatively, you can download the <a href="https://raw.githubusercontent.com/BigDesigner/wordpress-diagnose-tool/refs/heads/main/wordfence-db-normalized.json" target="_blank" rel="noopener noreferrer" class="text-sky-400 hover:underline">pre-normalized CVE database (~30MB)</a> and upload it directly using the <strong>Import JSON File</strong> button below.
                                                     </div>
                                                 </div>
                                                 <a
