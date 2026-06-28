@@ -37,3 +37,6 @@ desktop.ini
 # Local/tooling files
 .npm-cache/
 repomix-output.xml
+
+# Large Raw DB Files
+wordfence-db/
