@@ -186,6 +186,9 @@ final class ThreatIntelAgent implements DiagnosticInterface
 
     private function refreshThreatFeed(): bool
     {
+        @ini_set('memory_limit', '512M');
+        @set_time_limit(180);
+
         $apiKey = $this->getConfiguredApiKey();
         if ($apiKey === '') {
             $this->lastActionResult = [
